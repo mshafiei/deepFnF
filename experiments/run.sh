@@ -9,7 +9,8 @@ apt install -y python3.7 python3.7-distutils python3.7-venv exiftool
 # source ./venv/bin/activate
 # pip install --upgrade pip
 python3.7 -m pip install --upgrade pip
-python3.7 -m pip install imageio tensorflow==1.13.1 tensorflow-gpu==1.13.1 scikit-image==0.16.2 tqdm PyExifTool piq lpips plotly==5.6.0 pandas kaleido
+python3.7 -m pip install imageio setuptools tensorflow==1.13.1 tensorflow-gpu==1.13.1 scikit-image==0.16.2 tqdm 
+python3.7 -m pip install PyExifTool piq lpips plotly==5.6.0 pandas kaleido
 python3.7 -c """import imageio
 imageio.plugins.freeimage.download()
 """
