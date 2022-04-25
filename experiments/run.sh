@@ -9,7 +9,7 @@ pip3 install PyExifTool piq lpips plotly==5.6.0 pandas kaleido
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
-cd /mshvol2/users/mohammad/optimization/DifferentiableSolver
+cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
 echo command:
 echo $@
