@@ -1,5 +1,5 @@
 #!/bin/bash
-exp_params=" \
+exp_params="\
 --TLIST ./data/train_1600.txt \
 --VPATH ./data/valset/"
 
