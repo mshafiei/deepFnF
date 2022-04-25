@@ -72,7 +72,7 @@ def camera_to_rgb(imgs, color_matrix, adapt_matrix):
 
     xyz = tf.linalg.solve(color_matrix, imgs)
     xyz = tf.linalg.matmul(adapt_matrix, xyz)
-    rgb = tf.linalg.matmul(CONVERSION_MATRICES['xyz_to_rgb'], xyz)
+    rgb = tf.linalg.matmul(CONVERSION_MATRICES['xyz_to_rgb'][None,...], xyz)
     rgb = gamma_correct(rgb)
 
     rgb = tf.transpose(rgb, [0, 2, 1])

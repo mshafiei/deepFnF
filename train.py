@@ -14,7 +14,7 @@ from utils.dataset import Dataset
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--TLIST', type=str, default='data/train.txt', help='Training dataset filename')
+parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Training dataset filename')
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
 opts = parser.parse_args()
