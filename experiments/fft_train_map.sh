@@ -6,5 +6,5 @@ exp_params="\
 name=msh-deepfnf-retrain
 scriptFn="train.py $exp_params"
 
-# ./experiments/run_local.sh "$scriptFn"
-./experiments/run_server.sh "$scriptFn" "$name"
+./experiments/run_local.sh "$scriptFn"
+# ./experiments/run_server.sh "$scriptFn" "$name"
