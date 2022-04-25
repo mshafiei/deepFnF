@@ -16,4 +16,4 @@ imageio.plugins.freeimage.download()
 export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
 echo command:
 echo $@
-python3 $@
+python3.7 $@
