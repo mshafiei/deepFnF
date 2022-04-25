@@ -3,7 +3,7 @@ exp_params="\
 --TLIST ./data/train_1600.txt \
 --VPATH ./data/valset/"
 
-name=msh-deepfnf-retrain4
+name=msh-deepfnf-retrain2
 scriptFn="train.py $exp_params"
 
 # ./experiments/run_local.sh "$scriptFn"
