@@ -1,4 +1,5 @@
 #!/bin/bash
+cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 cp /root/ssh_mount/id_rsa* /root/.ssh/
 chmod 400 ~/.ssh/id_rsa
 source ./venv/bin/activate
@@ -9,7 +10,6 @@ pip3 install PyExifTool piq lpips plotly==5.6.0 pandas kaleido
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
-cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
 echo command:
 echo $@
