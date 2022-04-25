@@ -13,3 +13,4 @@ cd /mshvol2/users/mohammad/optimization/DifferentiableSolver
 export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
 echo command:
 echo $@
+python3 $@
