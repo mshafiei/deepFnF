@@ -16,6 +16,7 @@ from utils.dataset import Dataset
 parser = argparse.ArgumentParser()
 parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Training dataset filename')
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
+parser.add_argument('--model', type=str, default='deepfnf+fft',choices=['deepfnf','deepfnf+fft'], help='Validation dataset')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
 opts = parser.parse_args()
 
@@ -34,7 +35,12 @@ SAVEFREQ = 5e4
 wts = 'wts'
 if not os.path.exists(wts):
     os.makedirs(wts)
-model = net.Net(ksz=15, num_basis=90, burst_length=2)
+if(opts.model == 'deepfnf'):
+    outchannels = 3
+elif(opts.model == 'deepfnf+fft'):
+    outchannels = 6
+
+model = net.Net(opts.model,outchannels,ksz=15, num_basis=90, burst_length=2)
 
 
 def get_lr(niter):
@@ -95,22 +101,38 @@ with tf.device('/cpu:0'):
             noise_std = tfu.estimate_std(noisy, sig_read, sig_shot)
             net_input = tf.concat([noisy, noise_std], axis=-1)
 
-            denoise = model.forward(net_input) / alpha
+            model_outpt = model.forward(net_input)
 
-            denoise = tfu.camera_to_rgb(
-                denoise, example['color_matrix'], example['adapt_matrix'])
             ambient = tfu.camera_to_rgb(
                 example['ambient'],
                 example['color_matrix'], example['adapt_matrix'])
 
             # Loss
-            l2_loss = tfu.l2_loss(denoise, ambient)
-            gradient_loss = tfu.gradient_loss(denoise, ambient)
-            psnr = tfu.get_psnr(denoise, ambient)
+            if('deepfnf+fft' == opts.model):
+                lmbda = model.weights['lmbda']
+                # screen_poisson = lambda x,y,z,w,u : tf.map_fn(tfu.screen_poisson,([x]*BSZ,y,z,w,u))
+                reshape = lambda x :tf.transpose(x,[0,3,1,2])
+                fft_res = tfu.screen_poisson(lmbda,reshape(noisy_ambient),reshape(model_outpt[...,:3]), reshape(model_outpt[...,3:]),IMSZ)
+                fft_res = tf.transpose(fft_res,[0,2,3,1])
+                denoise = tfu.camera_to_rgb(
+                fft_res/alpha, example['color_matrix'], example['adapt_matrix'])
+                sp_loss = tfu.l2_loss(denoise, ambient)
+                psnr = tfu.get_psnr(denoise, ambient)
+                
 
-            loss = l2_loss + gradient_loss
-            lvals = [loss, l2_loss, gradient_loss, psnr]
-            lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr']
+                lvals = [sp_loss, psnr]
+                lnms = ['loss', 'psnr']
+                loss = sp_loss
+            elif('deepfnf' == opts.model):
+                denoise = tfu.camera_to_rgb(
+                model_outpt/alpha, example['color_matrix'], example['adapt_matrix'])
+                l2_loss = tfu.l2_loss(denoise, ambient)
+                gradient_loss = tfu.gradient_loss(denoise, ambient)
+                psnr = tfu.get_psnr(denoise, ambient)
+
+                loss = l2_loss + gradient_loss
+                lvals = [loss, l2_loss, gradient_loss, psnr]
+                lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr']
 
             tower_loss.append(loss)
             tower_lvals.append(lvals)
@@ -183,6 +205,7 @@ while niter < MAXITER and not ut.stop:
         ut.vprint(niter, tnms, outs[0].tolist())
         ut.vprint(niter, ['lr'], [get_lr(niter)])
     else:
+        
         outs = sess.run(
             [loss, tStep],
             feed_dict={lr: get_lr(niter), global_step: niter}

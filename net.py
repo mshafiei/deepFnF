@@ -7,12 +7,15 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2):
+    def __init__(self,model,outchannels, num_basis=90, ksz=15, burst_length=2):
         self.weights = {}
+        if(model == 'deepfnf+fft'):
+            self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=10000, dtype=tf.float32))
         self.activations = OrderedDict()
         self.num_basis = num_basis
         self.ksz = ksz
         self.burst_length = burst_length
+        self.noutchannels = outchannels
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -174,10 +177,10 @@ class Net:
 
         out, skips = self.encode(inp)
         out = self.decode(out, skips)
-        out = self.conv('output', out, self.num_basis + 3, relu=False)
+        out = self.conv('output', out, self.num_basis + self.noutchannels, relu=False)
         self.coeffs_pre_soft = out
         self.coeffs = out[..., :self.num_basis]
-        self.scale = out[..., -3:]
+        self.scale = out[..., -self.noutchannels:]
         self.activations['output'] = self.coeffs
 
     def combine(self):
@@ -210,6 +213,8 @@ class Net:
         smoothed_ambient = tfu.apply_dilated_filtering(
             smoothed_ambient, self.kernels[..., 1], dilation=4)
         filtered_ambient = filtered_ambient + smoothed_ambient
+        if(self.noutchannels == 6):
+            filtered_ambient = tf.concat((filtered_ambient,filtered_ambient),axis=-1)
         denoised = filtered_ambient * self.scale
-
+        
         return denoised
