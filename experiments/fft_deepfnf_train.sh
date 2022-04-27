@@ -5,7 +5,7 @@ exp_params="\
 --model deepfnf+fft \
 --weight_dir fft_log"
 
-name=msh-deepfnf-fft-train1
+name=msh-deepfnf-fft-train0
 scriptFn="train.py $exp_params"
 
 # ./experiments/run_local.sh "$scriptFn"
