@@ -155,8 +155,10 @@ with tf.device('/cpu:0'):
 
 #########################################################################
 # Start TF session
-sess = tf.Session(config=tf.ConfigProto(
-    allow_soft_placement=True))
+config=tf.ConfigProto(
+    allow_soft_placement=True)
+config.gpu_options.per_process_gpu_memory_fraction = 0.85
+sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 dataset.init_handles(sess)
 
