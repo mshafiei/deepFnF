@@ -18,6 +18,7 @@ parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Tr
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
 parser.add_argument('--model', type=str, default='deepfnf+fft',choices=['deepfnf','deepfnf+fft'], help='Validation dataset')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
+parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
 opts = parser.parse_args()
 
 TLIST = opts.TLIST
@@ -32,7 +33,7 @@ MAXITER = 1.5e6
 VALFREQ = 2e1
 SAVEFREQ = 5e4
 
-wts = 'wts'
+wts = opts.weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
 if(opts.model == 'deepfnf'):
