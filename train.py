@@ -36,7 +36,7 @@ LR = 1e-4
 DROP = (1.1e6, 1.25e6) # Learning rate drop
 MAXITER = 1.5e6
 
-VALFREQ = 2e1
+VALFREQ = 4e1
 SAVEFREQ = 5e4
 
 wts = opts.weight_dir
