@@ -26,7 +26,7 @@ opts = parser.parse_args()
 opts.expname = 'deepfnf-fft'
 opts.logdir = 'deepfnf-fft'
 logger = Viz.logger(opts,opts.__dict__)
-
+opts = logger.opts
 TLIST = opts.TLIST
 VPATH = opts.VPATH
 
@@ -36,7 +36,7 @@ LR = 1e-4
 DROP = (1.1e6, 1.25e6) # Learning rate drop
 MAXITER = 1.5e6
 
-VALFREQ = 4e1
+VALFREQ = 1e4
 SAVEFREQ = 5e4
 
 wts = opts.weight_dir
