@@ -7,7 +7,7 @@ import utils.np_utils as npu
 import numpy as np
 import tensorflow as tf
 
-import net
+import net_tmp
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset import Dataset
@@ -16,20 +16,18 @@ import cvgutils.Viz as Viz
 parser = argparse.ArgumentParser()
 parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Training dataset filename')
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
-parser.add_argument('--model', type=str, default='deepfnf+fft',choices=['deepfnf','deepfnf+fft'], help='Validation dataset')
+parser.add_argument('--model', type=str, default='deepfnf+fft_helmholz',choices=['deepfnf','deepfnf+fft','deepfnf+fft_grad_image','deepfnf+fft_helmholz'], help='Validation dataset')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
+parser.add_argument('--mindelta', type=float, default=1, help='minimum delta value')
 parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
 parser.add_argument('--visualize_freq', type=int, default=5001, help='How many iterations before visualization')
 
 parser = Viz.logger.parse_arguments(parser)
 opts = parser.parse_args()
-opts.expname = 'deepfnf-fft'
-opts.logdir = 'deepfnf-fft'
 logger = Viz.logger(opts,opts.__dict__)
 opts = logger.opts
 TLIST = opts.TLIST
 VPATH = opts.VPATH
-
 BSZ = 1
 IMSZ = 448
 LR = 1e-4
@@ -42,12 +40,11 @@ SAVEFREQ = 5e4
 wts = opts.weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
-if(opts.model == 'deepfnf'):
+if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image'):
     outchannels = 3
-elif(opts.model == 'deepfnf+fft'):
+elif(opts.model == 'deepfnf+fft' or opts.model == 'deepfnf+fft_helmholz'):
     outchannels = 6
-
-model = net.Net(opts.model,outchannels,ksz=15, num_basis=90, burst_length=2)
+model = net_tmp.Net(opts.model,outchannels,opts.mindelta,ksz=15, num_basis=90, burst_length=2)
 
 
 def get_lr(niter):
@@ -109,21 +106,39 @@ with tf.device('/cpu:0'):
             net_input = tf.concat([noisy, noise_std], axis=-1)
 
             model_outpt = model.forward(net_input)
-            pre_ambient = example['ambient']
+
             ambient = tfu.camera_to_rgb(
                 example['ambient'],
                 example['color_matrix'], example['adapt_matrix'])
-            noisy_ambient_map = tfu.camera_to_rgb(
+            noisy_scaled = tfu.camera_to_rgb(
                 noisy_ambient/example['alpha'],
                 example['color_matrix'], example['adapt_matrix'])
-
-            # Loss
-            if('deepfnf+fft' == opts.model):
+                
+            if('fft' in opts.model):
                 lmbda = model.weights['lmbda']
+                if('deepfnf+fft' == opts.model):
+                    gx = model_outpt[...,:3]
+                    gy = model_outpt[...,3:]
+                if('deepfnf+fft_helmholz' == opts.model):
+                    delta = model.weights['delta']
+                    phi = model_outpt[...,:3]
+                    a = model_outpt[...,3:]
+                    phix = tfu.dx_tf(phi)
+                    phiy = tfu.dy_tf(phi)
+                    ax = tfu.dx_tf(a)
+                    ay = tfu.dy_tf(a)
+                    gx = phix - tf.math.softplus(delta) * ay
+                    gy = phiy + tf.math.softplus(delta) * ax
+                if('deepfnf+fft_grad_image' == opts.model):
+                    gx = tfu.dx_tf(model_outpt)
+                    gy = tfu.dy_tf(model_outpt)
                 # screen_poisson = lambda x,y,z,w,u : tf.map_fn(tfu.screen_poisson,([x]*BSZ,y,z,w,u))
                 reshape = lambda x :tf.transpose(x,[0,3,1,2])
-                fft_res = tfu.screen_poisson(lmbda,reshape(noisy_ambient),reshape(model_outpt[...,:3]), reshape(model_outpt[...,3:]),IMSZ)
+                fft_res = tfu.screen_poisson(lmbda,reshape(noisy_ambient),reshape(gx), reshape(gy),IMSZ)
+                
                 fft_res = tf.transpose(fft_res,[0,2,3,1])
+                dx = tfu.dx_tf(fft_res)
+                dy = tfu.dy_tf(fft_res)
                 denoise = tfu.camera_to_rgb(
                 fft_res/alpha, example['color_matrix'], example['adapt_matrix'])
                 sp_loss = tfu.l2_loss(denoise, ambient)
@@ -133,9 +148,9 @@ with tf.device('/cpu:0'):
                 lvals = [sp_loss, psnr]
                 lnms = ['loss', 'psnr']
                 loss = sp_loss
-            elif('deepfnf' == opts.model):
+            if('deepfnf' == opts.model):# Loss
                 denoise = tfu.camera_to_rgb(
-                model_outpt/alpha, example['color_matrix'], example['adapt_matrix'])
+                    model_outpt/alpha, example['color_matrix'], example['adapt_matrix'])
                 l2_loss = tfu.l2_loss(denoise, ambient)
                 gradient_loss = tfu.gradient_loss(denoise, ambient)
                 psnr = tfu.get_psnr(denoise, ambient)
@@ -189,55 +204,8 @@ if niter > 0:
 stop = False
 ut.mprint("Starting from Iteration %d" % niter)
 dataset.swap_train(sess)
-def dx(im):
-    im = np.pad(im,((0,0),(0,0),(1,0),(0,0)))
-    return im[:,:,1:,:]-im[:,:,:-1,:]
-def dy(im):
-    im = np.pad(im,((0,0),(1,0),(0,0),(0,0)))
-    return im[:,1:,:,:]-im[:,:-1,:,:]
-def metrics(preds,gts):
-    mse, psnr, ssim = [], [], []
-    for pred,gt in zip(preds,gts):
-        pred = np.clip(pred,0,1)
-        gt = np.clip(gt,0,1)
-        mse.append(npu.get_mse(pred,gt))
-        psnr.append(npu.get_psnr(pred,gt))
-        ssim.append(npu.get_ssim(pred,gt))
-    return {'mse':mse,'psnr':psnr,'ssim':ssim}
-
-def visualize(inpt):
-
-    # g = self.quad_model(inpt['net_input'])
-    g,fft_res = inpt['g'],inpt['fft_res']
-    gx = g[...,:3]
-    gy = g[...,3:]
-    # predict = tfu.camera_to_rgb_batch(predict/inpt['alpha'],inpt)
-    dx = np.roll(fft_res, 1, axis=[2]) - fft_res
-    dy = np.roll(fft_res, 1, axis=[1]) - fft_res
-
-    dxx = np.roll(dx, 1, axis=[2]) - dx
-    dyy = np.roll(dy, 1, axis=[1]) - dy
-    gxx = np.roll(gx, 1, axis=[2]) - gx
-    gyy = np.roll(gy, 1, axis=[1]) - gy
-    loss_data = ((dx - gx) ** 2 + (dy - gy) ** 2).mean()
-    loss_smoothness = ((fft_res/inpt['alpha'] - inpt['preambient']) ** 2).mean()
-    
-    
-    
-    out = [inpt['predict'],inpt['ambient'],inpt['noisy'],fft_res/inpt['alpha'],
-            np.abs(gxx)*1000,np.abs(dxx/inpt['alpha'])*100,
-            np.abs(gyy)*1000,np.abs(dyy/inpt['alpha'])*100,
-            np.abs(gx),np.abs(dx/inpt['alpha'])*100,
-            np.abs(gy),np.abs(dy/inpt['alpha'])*100]
-    return out,{'loss_data':loss_data,'loss_smoothness':loss_smoothness}
-def labels(mtrcs_pred,mtrcs_inpt):
-    out = [r'$Prediction~PSNR~%.3f$'%mtrcs_pred['psnr'][0],
-           r'$Ground Truth$',r'$I_{noisy}~PSNR:%.3f$'%mtrcs_inpt['psnr'][0],
-           r'$I$',r'$Unet~output~(|g^x_x|)~\times~1000$',r'$|I_{xx}|~\times~100$',r'$Unet~output~(|g^y_y|)~\times~1000$',r'$|I_{yy}|~\times~100$',
-    r'$Unet~output~(|g^x|)~\times~1.$',r'$|I_{x}|~\times~100$',r'$Unet~output (|g^y|)~\times~1.$',r'$|I_{y}|~\times~100$']
-    return out
-    # predict,(gt,grad_x,dx,grad_y,dy) = self(inpt)
-    # return [predict,gt,grad_x[None,...],dx,grad_y[None,...],dy]
+# sess.run(tf.math.softplus(delta))
+# sess.run(tf.math.softplus(delta))
 while niter < MAXITER and not ut.stop:
 
     # Validate model every so often
@@ -257,37 +225,50 @@ while niter < MAXITER and not ut.stop:
         dataset.swap_train(sess)
 
     # Run training step and print losses
+    vis_tf,lossdict, losspredict_tf,paramstr = {},{},{},''
+    mode=None
+    if('fft' in opts.model):
+        vis_tf.update({'fft_res':fft_res,'gx':gx,'gy':gy,'dx':dx,'dy':dy})
+        losspredict_tf.update({'lambda':model.weights['lmbda']})
+    if('helmholz' in opts.model):
+        vis_tf.update({'ax':ax,'ay':ay,'phix':phix,'phiy':phiy})
+        losspredict_tf.update({'delta':tf.math.softplus(model.weights['delta'])})
+    if('grad_image' in opts.model):
+        vis_tf.update({'g':model_outpt})
+    lossdict = sess.run(losspredict_tf) if len(losspredict_tf) > 0 else {}
+    paramstr += r'\lambda%.4f~' % lossdict['lambda'] if 'lambda' in lossdict.keys() else ''
+    paramstr += r'\delta%.4f' % lossdict['delta'] if 'delta' in lossdict.keys() else ''
     if niter % 100 == 0:
         outs = sess.run(
-            [lvals, tStep],
+            [lvals,psnr, tStep],
             feed_dict={lr: get_lr(niter), global_step: niter}
         )
         ut.vprint(niter, tnms, outs[0].tolist())
         ut.vprint(niter, ['lr'], [get_lr(niter)])
-        loss_dict = {i:j for i,j in zip(tnms,outs[0].tolist())}
+        lossdict.update({k:v for k,v in zip(tnms,outs[0].tolist())})
+        lossdict.update({'psnr':outs[1]})
         mode = 'val'
     else:
         outs = sess.run(
-            [loss, psnr, tStep,model.weights['lmbda']],
+            [loss, psnr,tStep],
             feed_dict={lr: get_lr(niter), global_step: niter}
         )
-        loss_dict = {'loss.t':outs[0],'psnr':outs[1],'lmbda':outs[3]}
-        ut.vprint(niter, ['loss.t','loss.psnr'], [outs[0],outs[1]])
+        lossdict.update({'psnr':outs[1]})
+        ut.vprint(niter, ['loss.t'], [outs[0]])
+        lossdict.update({'loss.t':outs[0]})
         mode = 'train'
-
     if(niter % opts.visualize_freq == 0):
-        visouts = sess.run([pre_ambient,denoise,model_outpt,fft_res,alpha,ambient,noisy_ambient_map])
-        inpt = {'g':visouts[2],'alpha':visouts[4],'fft_res':visouts[3],'preambient':visouts[0],'ambient':visouts[5],'predict':visouts[1],'noisy':visouts[6]}
-        visouts, losses = visualize(inpt)
-        mtrcs_pred = metrics(inpt['predict'],inpt['ambient'])
-        mtrcs_noisy = metrics(inpt['noisy'],inpt['ambient'])
-
-        logger.addImage(visouts,labels(mtrcs_pred,mtrcs_noisy),'',dim_type='BHWC')
-        logger.addMetrics(losses,'train')
-    
-    logger.addMetrics(loss_dict,mode)
+        fetch = {'denoise':denoise,'ambient':ambient,'noisy':noisy_scaled,'flash':noisy_flash}
+        fetch.update(vis_tf)
+        fetches = sess.run(fetch)
+        visouts = npu.visualize(fetches,opts)
+        mtrcs_pred = npu.metrics(fetches['denoise'],fetches['ambient'])
+        mtrcs_noisy = npu.metrics(fetches['noisy'],fetches['ambient'])
+        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'',dim_type='BHWC',text=r'$%s$'%paramstr)
+        # logger.addMetrics(losses,'train')
+    # logger.addMetrics(loss_dict,mode)
+    logger.addMetrics(lossdict,mode)
     logger.takeStep()
-
     niter = niter + opts.ngpus
 
     # Save model weights if needed

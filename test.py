@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 
-import net
+import net_tmp
 import utils.utils as ut
 import utils.tf_utils as tfu
 
@@ -29,7 +29,7 @@ def load_net(fn, model):
 datapath = 'data/testset'
 model_path = opts.wts
 
-model = net.Net(ksz=15, num_basis=90, burst_length=2)
+model = net_tmp.Net(ksz=15, num_basis=90, burst_length=2)
 
 print("Restoring model from " + model_path)
 load_net(model_path, model)

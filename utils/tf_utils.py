@@ -89,6 +89,12 @@ def get_gradient(imgs):
 def gradient_loss(pred, gt):
     return l1_loss(get_gradient(pred), get_gradient(gt))
 
+def dx_tf(x):
+    #x is b,h,w,c
+    return tf.roll(x, [1], axis=[2]) - x
+def dy_tf(x):
+    #x is b,h,w,c
+    return tf.roll(x, [1], axis=[1]) - x
 
 def l1_loss(pred, gt):
     return tf.reduce_mean(tf.abs(pred - gt))
