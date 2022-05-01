@@ -11,7 +11,7 @@ chmod 400 ~/.ssh/id_rsa
 # python3.7 -m pip install --upgrade pip
 # python3.7 -m pip install setuptools 
 # python3.7 -m pip install imageio tensorflow-gpu==1.15.0 scikit-image==0.16.2 tqdm PyExifTool piq lpips plotly==5.6.0 pandas kaleido
-pip3 install wandb natsort plotly pandas kaleido opencv-python tensorboardX jaxlib jax
+pip3 install wandb natsort plotly pandas kaleido opencv-python tensorboardX jaxlib jax scikit-image==0.15.0
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
