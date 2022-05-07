@@ -78,7 +78,31 @@ def camera_to_rgb(imgs, color_matrix, adapt_matrix):
     rgb = tf.transpose(rgb, [0, 2, 1])
     rgb = tf.reshape(rgb, imsp)
     return rgb
+def gamma_correct_np(x):
+    b = .0031308
+    gamma = 1. / 2.4
+    a = .055
+    k0 = 12.92
+    def gammafn(x): return (1 + a) * np.power(np.maximum(x, b), gamma) - a
+    srgb = np.where(x < b, k0 * x, gammafn(x))
+    k1 = (1 + a) * gamma
+    srgb = np.where(x > 1, k1 * x - k1 + 1, srgb)
+    return srgb
 
+def camera_to_rgb_np(imgs, color_matrix, adapt_matrix):
+    b, c = imgs.shape[0], imgs.shape[-1]
+    imsp = imgs.shape
+    imgs = imgs.reshape(b, -1, c)
+    imgs = imgs.transpose(0, 2, 1)
+
+    xyz = np.linalg.solve(color_matrix, imgs)
+    xyz = np.matmul(adapt_matrix, xyz)
+    rgb = np.matmul(CONVERSION_MATRICES['xyz_to_rgb'][None,...], xyz)
+    rgb = gamma_correct_np(rgb)
+
+    rgb = np.transpose(rgb, [0, 2, 1])
+    rgb = rgb.reshape(*imsp)
+    return rgb
 
 def get_gradient(imgs):
     return tf.concat([

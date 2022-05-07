@@ -1,6 +1,8 @@
+from typing import OrderedDict
 from skimage.measure import compare_ssim
 import numpy as np
 import imageio
+import utils.tf_utils as tfu
 
 def imsave(nm, img):
     if len(img.shape) == 4:
@@ -49,25 +51,49 @@ def dy_np(x):
     return np.roll(x, 1, axis=[1]) - x
 
 def visualize(inpt,opts):
+    wb = lambda x: tfu.camera_to_rgb_np(
+                    x, inpt['color_matrix'], inpt['adapt_matrix'])
+    out = OrderedDict()
+    out['denoise'] = inpt['denoise']
+    out['ambient'] = inpt['ambient']
+    out['noisy'] = inpt['noisy']
+    out['flash'] = wb(inpt['flash'])
 
-    out = [inpt['denoise'],inpt['ambient'],inpt['noisy'],inpt['flash']]
     if('fft' in opts.model):
-        out += [inpt['fft_res'],
-            np.abs(inpt['gx'])*1000,np.abs(inpt['dx'])*1000,
-            np.abs(inpt['gy'])*1000,np.abs(inpt['dy'])*1000]
+        out['fft_res'] = wb(np.abs(inpt['fft_res'])/inpt['alpha'])
+        out['gx'] = wb(np.abs(inpt['gx'])/inpt['alpha'])
+        out['dx'] = wb(np.abs(inpt['dx'])/inpt['alpha'])
+        out['gy'] = wb(np.abs(inpt['gy'])/inpt['alpha'])
+        out['dy'] = wb(np.abs(inpt['dy'])/inpt['alpha'])
+
     if(opts.model == 'deepfnf+fft_grad_image'):
-        out += [np.abs(inpt['g'])*1000]
+        out['g'] = wb(np.abs(inpt['g'])/inpt['alpha'])
     if('deepfnf+fft_helmholz' == opts.model):
-        out += [np.abs(inpt['phix'])*1000, np.abs(inpt['phiy'])*1000, np.abs(inpt['ax'])*1000, np.abs(inpt['ay'])*1000]
+        out['phix'] = wb(np.abs(inpt['phix'])/inpt['alpha'])
+        out['phiy'] = wb(np.abs(inpt['phiy'])/inpt['alpha'])
+        out['ax'] = wb(np.abs(inpt['ax'])/inpt['alpha'])
+        out['ay'] = wb(np.abs(inpt['ay'])/inpt['alpha'])
     return out
     
 def labels(mtrcs_pred,mtrcs_inpt,opts):
-    out = [r'$Prediction~PSNR~%.3f$'%mtrcs_pred['psnr'],
-           r'$Ground Truth$',r'$I_{noisy}~PSNR:%.3f$'%mtrcs_inpt['psnr'],r'$I_{flash}$']
+    out = OrderedDict()
+    out['denoise'] = r'$Prediction~PSNR~%.3f$'%mtrcs_pred['psnr']
+    out['ambient'] = r'$Ground Truth$'
+    out['noisy'] = r'$I_{noisy}~PSNR:%.3f$'%mtrcs_inpt['psnr']
+    out['flash'] = r'$I_{flash}$'
+
     if('fft' in opts.model):
-        out += [r'$I$',r'$(|g^x|)~\times~1000.$',r'$|I_{x}|~\times~1000$',r'$(|g^y|)~\times~1000.$',r'$|I_{y}|~\times~1000$']
+        out['fft_res'] = r'$I$'
+        out['gx'] = r'$(|g^x|)$'
+        out['dx'] = r'$|I_{x}|$'
+        out['gy'] = r'$(|g^y|)$'
+        out['dy'] = r'$|I_{y}|$'
+
     if(opts.model == 'deepfnf+fft_grad_image'):
-        out += [r'$|g| \times 1000$']
+        out['g'] = r'$|g|$'
     if('deepfnf+fft_helmholz' == opts.model):
-        out += [r'$|\nabla_x \phi| \times 1000$',r'$|\nabla_y \phi| \times 1000$',r'$|\nabla_x a| \times 1000$',r'$|\nabla_y a| \times 1000$']
+        out['phix'] = r'$|\nabla_x \phi|$'
+        out['phiy'] = r'$|\nabla_y \phi|$'
+        out['ax'] = r'$|\nabla_x a|$'
+        out['ay'] = r'$|\nabla_y a|$'
     return out

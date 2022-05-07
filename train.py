@@ -258,13 +258,14 @@ while niter < MAXITER and not ut.stop:
         lossdict.update({'loss.t':outs[0]})
         mode = 'train'
     if(niter % opts.visualize_freq == 0):
-        fetch = {'denoise':denoise,'ambient':ambient,'noisy':noisy_scaled,'flash':noisy_flash}
+        fetch = {'denoise':denoise,'ambient':ambient,'noisy':noisy_scaled,'flash':noisy_flash,'alpha':example['alpha'],'color_matrix':example['color_matrix'], 'adapt_matrix':example['adapt_matrix']}
         fetch.update(vis_tf)
         fetches = sess.run(fetch)
         visouts = npu.visualize(fetches,opts)
         mtrcs_pred = npu.metrics(fetches['denoise'],fetches['ambient'])
         mtrcs_noisy = npu.metrics(fetches['noisy'],fetches['ambient'])
-        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'',dim_type='BHWC',text=r'$%s$'%paramstr)
+        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'images',dim_type='BHWC',text=r'$%s$'%paramstr)
+        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'images_inset',dim_type='BHWC',text=r'$%s$'%paramstr,addinset=True)
         # logger.addMetrics(losses,'train')
     # logger.addMetrics(loss_dict,mode)
     logger.addMetrics(lossdict,mode)

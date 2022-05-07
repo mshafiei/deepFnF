@@ -1,15 +1,13 @@
 #!/bin/bash
 exp_params="\
---TLIST ./data/train_1600.txt \
+--TLIST ./data/train.txt \
 --VPATH ./data/valset/ \
 --weight_dir ./logs/deepfnf \
 --model deepfnf \
---logdir ./logs \
---expname fft_deepfnf \
---weight_dir wts"
-
-name=msh-deepfnf-retrain1
+--logdir ./logs/ \
+--expname fft_deepfnf"
+name=msh-deepfnf-retrain2
 scriptFn="train.py $exp_params"
 
-./experiments/run_local.sh "$scriptFn"
-# ./experiments/run_server.sh "$scriptFn" "$name"
+# ./experiments/run_local.sh "$scriptFn"
+./experiments/run_server.sh "$scriptFn" "$name"
