@@ -6,8 +6,9 @@ exp_params="\
 --model deepfnf \
 --logdir ./logs/ \
 --expname fft_deepfnf"
-name=msh-deepfnf-retrain2
+priority='normal'
+name=msh-deepfnf-retrain
 scriptFn="train.py $exp_params"
 
 # ./experiments/run_local.sh "$scriptFn"
-./experiments/run_server.sh "$scriptFn" "$name"
+./experiments/run_server.sh "$scriptFn" "$name" $priority

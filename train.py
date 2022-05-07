@@ -18,11 +18,12 @@ parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Tr
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
 parser.add_argument('--model', type=str, default='deepfnf+fft_helmholz',choices=['deepfnf','deepfnf+fft','deepfnf+fft_grad_image','deepfnf+fft_helmholz'], help='Validation dataset')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
-parser.add_argument('--mindelta', type=float, default=1, help='minimum delta value')
 parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
 parser.add_argument('--visualize_freq', type=int, default=5001, help='How many iterations before visualization')
 parser.add_argument('--val_freq', type=int, default=10000, help='How many iterations before visualization')
-
+parser.add_argument('--min_lmbda_phi', type=float, default=1, help='The min value of lambda phi')
+parser.add_argument('--min_lmbda_psi', type=float, default=1, help='The min value of lambda psi')
+parser.add_argument('--fixed_lambda', action='store_true',help='Do not change the delta value')
 
 parser = Viz.logger.parse_arguments(parser)
 opts = parser.parse_args()
@@ -39,6 +40,12 @@ MAXITER = 1.5e6
 VALFREQ = 1e4
 SAVEFREQ = 5e4
 
+min_lph = np.log(np.exp(opts.min_lmbda_phi) - 1)
+min_lps = np.log(np.exp(opts.min_lmbda_psi) - 1)
+if(opts.fixed_lambda):
+    lambda_phi = tf.constant(np.float32(min_lph))
+    lambda_psi = tf.constant(np.float32(min_lps))
+    
 wts = opts.weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
@@ -46,7 +53,7 @@ if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image'):
     outchannels = 3
 elif(opts.model == 'deepfnf+fft' or opts.model == 'deepfnf+fft_helmholz'):
     outchannels = 6
-model = net_tmp.Net(opts.model,outchannels,opts.mindelta,ksz=15, num_basis=90, burst_length=2)
+model = net_tmp.Net(opts.model,outchannels,opts.min_lmbda_phi,opts.min_lmbda_psi,opts.fixed_lambda,ksz=15, num_basis=90, burst_length=2)
 
 
 def get_lr(niter):
@@ -122,15 +129,17 @@ with tf.device('/cpu:0'):
                     gx = model_outpt[...,:3]
                     gy = model_outpt[...,3:]
                 if('deepfnf+fft_helmholz' == opts.model):
-                    delta = model.weights['delta']
+                    if(not opts.fixed_lambda):
+                        lambda_phi = model.weights['lambda_phi']
+                        lambda_psi = model.weights['lambda_psi']
                     phi = model_outpt[...,:3]
                     a = model_outpt[...,3:]
                     phix = tfu.dx_tf(phi)
                     phiy = tfu.dy_tf(phi)
                     ax = tfu.dx_tf(a)
                     ay = tfu.dy_tf(a)
-                    gx = phix - tf.math.softplus(delta) * ay
-                    gy = phiy + tf.math.softplus(delta) * ax
+                    gx = tf.math.softplus(lambda_phi) * phix - tf.math.softplus(lambda_psi) * ay
+                    gy = tf.math.softplus(lambda_phi) * phiy + tf.math.softplus(lambda_psi) * ax
                 if('deepfnf+fft_grad_image' == opts.model):
                     gx = tfu.dx_tf(model_outpt)
                     gy = tfu.dy_tf(model_outpt)
@@ -234,12 +243,18 @@ while niter < MAXITER and not ut.stop:
         losspredict_tf.update({'lambda':model.weights['lmbda']})
     if('helmholz' in opts.model):
         vis_tf.update({'ax':ax,'ay':ay,'phix':phix,'phiy':phiy})
-        losspredict_tf.update({'delta':tf.math.softplus(model.weights['delta'])})
+        if(opts.fixed_lambda):
+            losspredict_tf.update({'lambda_phi':tf.math.softplus(lambda_phi)})
+            losspredict_tf.update({'lambda_psi':tf.math.softplus(lambda_psi)})
+        else:
+            losspredict_tf.update({'lambda_phi':tf.math.softplus(model.weights['lambda_phi'])})
+            losspredict_tf.update({'lambda_psi':tf.math.softplus(model.weights['lambda_psi'])})
     if('grad_image' in opts.model):
         vis_tf.update({'g':model_outpt})
     lossdict = sess.run(losspredict_tf) if len(losspredict_tf) > 0 else {}
     paramstr += r'\lambda%.4f~' % lossdict['lambda'] if 'lambda' in lossdict.keys() else ''
-    paramstr += r'\delta%.4f' % lossdict['delta'] if 'delta' in lossdict.keys() else ''
+    paramstr += r'\lambda_{phi}%.4f' % lossdict['lambda_phi'] if 'lambda_phi' in lossdict.keys() else ''
+    paramstr += r'\lambda_{psi}ta%.4f' % lossdict['lambda_psi'] if 'lambda_psi' in lossdict.keys() else ''
     if niter % opts.val_freq == 0:
         outs = sess.run(
             [lvals,psnr, tStep],

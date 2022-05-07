@@ -7,12 +7,16 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self,model,outchannels,mindelta, num_basis=90, ksz=15, burst_length=2):
+    def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, num_basis=90, ksz=15, burst_length=2):
         self.weights = {}
         if('fft' in model):
             self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=0.1, dtype=tf.float32))
         if(model == 'deepfnf+fft_helmholz'):
-            self.weights['delta'] = tf.Variable(tf.random_uniform([1], minval=mindelta, maxval=0, dtype=tf.float32))
+            min_lph = tf.log(tf.exp(min_lmbda_phi) - 1)
+            min_lps = tf.log(tf.exp(min_lmbda_psi) - 1)
+            if(not fixed_lamba):
+                self.weights['lambda_phi'] = tf.Variable(tf.random_uniform([1], minval=min_lph, maxval=1, dtype=tf.float32))
+                self.weights['lambda_psi'] = tf.Variable(tf.random_uniform([1], minval=min_lps, maxval=1, dtype=tf.float32))
         self.activations = OrderedDict()
         self.num_basis = num_basis
         self.ksz = ksz
