@@ -10,7 +10,7 @@ class Net:
     def __init__(self,model,outchannels,mindelta, num_basis=90, ksz=15, burst_length=2):
         self.weights = {}
         if('fft' in model):
-            self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=1, dtype=tf.float32))
+            self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=0.1, dtype=tf.float32))
         if(model == 'deepfnf+fft_helmholz'):
             self.weights['delta'] = tf.Variable(tf.random_uniform([1], minval=mindelta, maxval=0, dtype=tf.float32))
         self.activations = OrderedDict()
