@@ -5,10 +5,12 @@ exp_params="\
 --model deepfnf+fft_grad_image \
 --weight_dir ./logs/fft_log_grad_image \
 --logdir ./logs \
---expname fft_log_grad_image --store_params"
+--expname fft_log_grad_image \
+--visualize_freq 50001"
 
+priority='normal'
 name=msh-deepfnf-fft-train-init1
 scriptFn="train.py $exp_params"
 
-./experiments/run_local.sh "$scriptFn"
-# ./experiments/run_server.sh "$scriptFn" "$name"
+# ./experiments/run_local.sh "$scriptFn"
+./experiments/run_server.sh "$scriptFn" "$name" $priority

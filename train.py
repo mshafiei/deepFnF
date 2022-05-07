@@ -21,6 +21,8 @@ parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
 parser.add_argument('--mindelta', type=float, default=1, help='minimum delta value')
 parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
 parser.add_argument('--visualize_freq', type=int, default=5001, help='How many iterations before visualization')
+parser.add_argument('--val_freq', type=int, default=10000, help='How many iterations before visualization')
+
 
 parser = Viz.logger.parse_arguments(parser)
 opts = parser.parse_args()
@@ -238,7 +240,7 @@ while niter < MAXITER and not ut.stop:
     lossdict = sess.run(losspredict_tf) if len(losspredict_tf) > 0 else {}
     paramstr += r'\lambda%.4f~' % lossdict['lambda'] if 'lambda' in lossdict.keys() else ''
     paramstr += r'\delta%.4f' % lossdict['delta'] if 'delta' in lossdict.keys() else ''
-    if niter % 100 == 0:
+    if niter % opts.val_freq == 0:
         outs = sess.run(
             [lvals,psnr, tStep],
             feed_dict={lr: get_lr(niter), global_step: niter}
