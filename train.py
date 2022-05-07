@@ -146,7 +146,7 @@ with tf.device('/cpu:0'):
                 # screen_poisson = lambda x,y,z,w,u : tf.map_fn(tfu.screen_poisson,([x]*BSZ,y,z,w,u))
                 reshape = lambda x :tf.transpose(x,[0,3,1,2])
                 fft_res = tfu.screen_poisson(lmbda,reshape(noisy_ambient),reshape(gx), reshape(gy),IMSZ)
-                
+                # fft_res = gx + gy + noisy_ambient * lmbda
                 fft_res = tf.transpose(fft_res,[0,2,3,1])
                 dx = tfu.dx_tf(fft_res)
                 dy = tfu.dy_tf(fft_res)
@@ -238,23 +238,7 @@ while niter < MAXITER and not ut.stop:
     # Run training step and print losses
     vis_tf,lossdict, losspredict_tf,paramstr = {},{},{},''
     mode=None
-    if('fft' in opts.model):
-        vis_tf.update({'fft_res':fft_res,'gx':gx,'gy':gy,'dx':dx,'dy':dy})
-        losspredict_tf.update({'lambda':model.weights['lmbda']})
-    if('helmholz' in opts.model):
-        vis_tf.update({'ax':ax,'ay':ay,'phix':phix,'phiy':phiy})
-        if(opts.fixed_lambda):
-            losspredict_tf.update({'lambda_phi':tf.math.softplus(lambda_phi)})
-            losspredict_tf.update({'lambda_psi':tf.math.softplus(lambda_psi)})
-        else:
-            losspredict_tf.update({'lambda_phi':tf.math.softplus(model.weights['lambda_phi'])})
-            losspredict_tf.update({'lambda_psi':tf.math.softplus(model.weights['lambda_psi'])})
-    if('grad_image' in opts.model):
-        vis_tf.update({'g':model_outpt})
-    lossdict = sess.run(losspredict_tf) if len(losspredict_tf) > 0 else {}
-    paramstr += r'\lambda%.4f~' % lossdict['lambda'] if 'lambda' in lossdict.keys() else ''
-    paramstr += r'\lambda_{phi}%.4f' % lossdict['lambda_phi'] if 'lambda_phi' in lossdict.keys() else ''
-    paramstr += r'\lambda_{psi}ta%.4f' % lossdict['lambda_psi'] if 'lambda_psi' in lossdict.keys() else ''
+
     if niter % opts.val_freq == 0:
         outs = sess.run(
             [lvals,psnr, tStep],
@@ -275,6 +259,25 @@ while niter < MAXITER and not ut.stop:
         lossdict.update({'loss.t':outs[0]})
         mode = 'train'
     if(niter % opts.visualize_freq == 0):
+        if('fft' in opts.model):
+            vis_tf.update({'fft_res':fft_res,'gx':gx,'gy':gy,'dx':dx,'dy':dy})
+            losspredict_tf.update({'lambda':model.weights['lmbda']})
+        if('helmholz' in opts.model):
+            # pass
+            vis_tf.update({'ax':ax,'ay':ay,'phix':phix,'phiy':phiy})
+            if(opts.fixed_lambda):
+                losspredict_tf.update({'lambda_phi':tf.math.softplus(lambda_phi)})
+                losspredict_tf.update({'lambda_psi':tf.math.softplus(lambda_psi)})
+            else:
+                losspredict_tf.update({'lambda_phi':tf.math.softplus(model.weights['lambda_phi'])})
+                losspredict_tf.update({'lambda_psi':tf.math.softplus(model.weights['lambda_psi'])})
+        if('grad_image' in opts.model):
+            vis_tf.update({'g':model_outpt})
+        lossdict = sess.run(losspredict_tf) if len(losspredict_tf) > 0 else {}
+        paramstr += r'\lambda%.4f~' % lossdict['lambda'] if 'lambda' in lossdict.keys() else ''
+        paramstr += r'\lambda_{phi}%.4f' % lossdict['lambda_phi'] if 'lambda_phi' in lossdict.keys() else ''
+        paramstr += r'\lambda_{psi}ta%.4f' % lossdict['lambda_psi'] if 'lambda_psi' in lossdict.keys() else ''
+        
         fetch = {'denoise':denoise,'ambient':ambient,'noisy':noisy_scaled,'flash':noisy_flash,'alpha':example['alpha'],'color_matrix':example['color_matrix'], 'adapt_matrix':example['adapt_matrix']}
         fetch.update(vis_tf)
         fetches = sess.run(fetch)

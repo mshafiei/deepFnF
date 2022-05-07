@@ -5,7 +5,7 @@ exp_params="\
 --weight_dir ./logs/deepfnf \
 --model deepfnf \
 --logdir ./logs/ \
---expname fft_deepfnf"
+--expname deepfnf"
 priority='normal'
 name=msh-deepfnf-retrain
 scriptFn="train.py $exp_params"

@@ -131,20 +131,23 @@ def screen_poisson(lambda_d, img,grad_x,grad_y,IMSZ):
     img_freq = tf.signal.fft2d(tf.dtypes.complex(img,tf.zeros_like(img)))
     grad_x_freq = tf.signal.fft2d(tf.dtypes.complex(grad_x,tf.zeros_like(grad_x)))
     grad_y_freq = tf.signal.fft2d(tf.dtypes.complex(grad_y,tf.zeros_like(grad_y)))
-    shape = [IMSZ,IMSZ]
-    sx = np.fft.fftfreq(IMSZ).astype(np.float32)
-    sx = np.repeat(sx, IMSZ)
-    sx = np.reshape(sx, [IMSZ,IMSZ])
-    sx = np.transpose(sx)
-    sy = np.fft.fftfreq(IMSZ).astype(np.float32)
-    sy = np.repeat(sy, IMSZ)
-    sy = np.reshape(sy, shape)
+    sz = tf.complex(float(IMSZ),0.)
+    tf_fftfreq_even = lambda n : tf.concat((tf.range(n/2),tf.range(-n/2,0)),0) / n
+    tf_fftfreq_odd = lambda n : tf.concat((tf.range((n-1)/2+1),tf.range(-(n-1)/2,0)),0) / n
+    tf_fftfreq = lambda n : tf_fftfreq_even(n) if n%2==0 else tf_fftfreq_odd(n)
+    sx = tf.complex(tf_fftfreq(IMSZ),0.)
+    sx = tf.reshape(sx, [-1,1])
+    sx = tf.tile(sx, [1, IMSZ])
+    sx = tf.transpose(sx)
+    sy = tf.complex(tf_fftfreq(IMSZ),0.)
+    sy = tf.reshape(sy, [-1,1])
+    sy = tf.tile(sy, [1, IMSZ])
 
     # Fourier transform of shift operators
-    Dx_freq = 2 * math.pi * (np.exp(-1j * sx) - 1)
-    Dy_freq = 2 * math.pi * (np.exp(-1j * sy) - 1)
-    Dx_freq = tf.convert_to_tensor(Dx_freq)[None,None,...]
-    Dy_freq = tf.convert_to_tensor(Dy_freq)[None,None,...]
+    Dx_freq = 2 * math.pi * (tf.exp(-1j * sx) - 1)
+    Dy_freq = 2 * math.pi * (tf.exp(-1j * sy) - 1)
+    Dx_freq = Dx_freq[None,None,...]
+    Dy_freq = Dy_freq[None,None,...]
     # my_grad_x_freq = Dx_freq * img_freqs)
     # my_grad_x_freq & my_grad_y_freq should be the same as grad_x_freq & grad_y_freq
 
