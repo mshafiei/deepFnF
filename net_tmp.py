@@ -7,10 +7,10 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, num_basis=90, ksz=15, burst_length=2):
+    def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, max_lambda,num_basis=90, ksz=15, burst_length=2):
         self.weights = {}
         if('fft' in model):
-            self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=0.1, dtype=tf.float32))
+            self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=max_lambda, dtype=tf.float32))
         if(model == 'deepfnf+fft_helmholz'):
             min_lph = tf.log(tf.exp(min_lmbda_phi) - 1)
             min_lps = tf.log(tf.exp(min_lmbda_psi) - 1)

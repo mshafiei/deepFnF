@@ -24,6 +24,7 @@ parser.add_argument('--val_freq', type=int, default=10000, help='How many iterat
 parser.add_argument('--min_lmbda_phi', type=float, default=1, help='The min value of lambda phi')
 parser.add_argument('--min_lmbda_psi', type=float, default=1, help='The min value of lambda psi')
 parser.add_argument('--fixed_lambda', action='store_true',help='Do not change the delta value')
+parser.add_argument('--max_lambda', type=float,default=0.001,help='Maximum lambda for initialization')
 
 parser = Viz.logger.parse_arguments(parser)
 opts = parser.parse_args()
@@ -53,7 +54,7 @@ if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image'):
     outchannels = 3
 elif(opts.model == 'deepfnf+fft' or opts.model == 'deepfnf+fft_helmholz'):
     outchannels = 6
-model = net_tmp.Net(opts.model,outchannels,opts.min_lmbda_phi,opts.min_lmbda_psi,opts.fixed_lambda,ksz=15, num_basis=90, burst_length=2)
+model = net_tmp.Net(opts.model,outchannels,opts.min_lmbda_phi,opts.min_lmbda_psi,opts.fixed_lambda,opts.max_lambda,ksz=15, num_basis=90, burst_length=2)
 
 
 def get_lr(niter):
