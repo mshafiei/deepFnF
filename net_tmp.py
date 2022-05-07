@@ -15,8 +15,8 @@ class Net:
             min_lph = tf.log(tf.exp(min_lmbda_phi) - 1)
             min_lps = tf.log(tf.exp(min_lmbda_psi) - 1)
             if(not fixed_lamba):
-                self.weights['lambda_phi'] = tf.Variable(tf.random_uniform([1], minval=min_lph, maxval=1, dtype=tf.float32))
-                self.weights['lambda_psi'] = tf.Variable(tf.random_uniform([1], minval=min_lps, maxval=1, dtype=tf.float32))
+                self.weights['lambda_phi'] = tf.Variable(min_lph)
+                self.weights['lambda_psi'] = tf.Variable(min_lps)
         self.activations = OrderedDict()
         self.num_basis = num_basis
         self.ksz = ksz
