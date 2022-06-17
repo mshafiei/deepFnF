@@ -9,6 +9,7 @@ import utils.tf_utils as tfu
 class Net:
     def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, max_lambda,num_basis=90, ksz=15, burst_length=2):
         self.weights = {}
+        self.model = model
         if('fft' in model):
             self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=max_lambda, dtype=tf.float32))
         if(model == 'deepfnf+fft_helmholz'):
@@ -157,7 +158,7 @@ class Net:
 
         return out
 
-    def create_basis(self):
+    def  create_basis(self):
         '''Predict image-specific basis'''
         assert self.ksz == 15
         bottleneck = self.activations['bottleneck']
@@ -189,6 +190,15 @@ class Net:
         self.scale = out[..., -self.noutchannels:]
         self.activations['output'] = self.coeffs
 
+    def direct_predict(self, inp):
+        '''Directly estimate ambient image'''
+        self.imsp = tf.shape(inp)
+
+        out, skips = self.encode(inp)
+        out = self.decode(out, skips)
+        out = self.conv('output', out, 3, relu=False)
+        self.out = out
+
     def combine(self):
         '''Combine coeffs and basis to get a per-pixel kernel'''
         imsp = self.imsp
@@ -201,8 +211,12 @@ class Net:
         self.kernels = tf.reshape(
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
+        
+    def forward_unet(self, inp):
+        self.direct_predict(inp)
+        return self.out
 
-    def forward(self, inp):
+    def forward_deepfnf(self, inp):
         self.predict_coeff(inp)
         self.create_basis()
         self.combine()
@@ -224,3 +238,9 @@ class Net:
         denoised = filtered_ambient * self.scale
         
         return denoised
+
+    def forward(self, inp):
+        if(self.model == 'unet'):
+            return self.forward_unet(inp)
+        else:
+            return self.forward_deepfnf(inp)
