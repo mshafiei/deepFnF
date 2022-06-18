@@ -12,23 +12,26 @@ import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset import Dataset
 import cvgutils.Viz as Viz
-
+import cvgutils.nn.tfUtils.utils as tfutils
 parser = argparse.ArgumentParser()
 parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Training dataset filename')
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
-parser.add_argument('--model', type=str, default='deepfnf+fft_helmholz',choices=['deepfnf','deepfnf+fft','deepfnf+fft_grad_image','deepfnf+fft_helmholz'], help='Validation dataset')
+parser.add_argument('--model', type=str, default='deepfnf+fft_helmholz',choices=['unet','deepfnf','deepfnf+fft','deepfnf+fft_grad_image','deepfnf+fft_helmholz'], help='Validation dataset')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
 parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
-parser.add_argument('--visualize_freq', type=int, default=5001, help='How many iterations before visualization')
+parser.add_argument('--visualize_freq', type=int, default=10001, help='How many iterations before visualization')
 parser.add_argument('--val_freq', type=int, default=10000, help='How many iterations before visualization')
-parser.add_argument('--min_lmbda_phi', type=float, default=1, help='The min value of lambda phi')
-parser.add_argument('--min_lmbda_psi', type=float, default=1, help='The min value of lambda psi')
+parser.add_argument('--min_lmbda_phi', type=float, default=1., help='The min value of lambda phi')
+parser.add_argument('--min_lmbda_psi', type=float, default=1., help='The min value of lambda psi')
 parser.add_argument('--fixed_lambda', action='store_true',help='Do not change the delta value')
 parser.add_argument('--max_lambda', type=float,default=0.001,help='Maximum lambda for initialization')
+parser.add_argument('--save_freq', type=int,default=100000,help='How often save parameters')
 
 parser = Viz.logger.parse_arguments(parser)
 opts = parser.parse_args()
 logger = Viz.logger(opts,opts.__dict__)
+
+
 opts = logger.opts
 TLIST = opts.TLIST
 VPATH = opts.VPATH
@@ -38,8 +41,8 @@ LR = 1e-4
 DROP = (1.1e6, 1.25e6) # Learning rate drop
 MAXITER = 1.5e6
 
-VALFREQ = 1e4
-SAVEFREQ = 5e4
+VALFREQ = opts.val_freq
+SAVEFREQ = opts.save_freq
 
 min_lph = np.log(np.exp(opts.min_lmbda_phi) - 1)
 min_lps = np.log(np.exp(opts.min_lmbda_psi) - 1)
@@ -50,7 +53,7 @@ if(opts.fixed_lambda):
 wts = opts.weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
-if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image'):
+if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image' or opts.model == 'unet'):
     outchannels = 3
 elif(opts.model == 'deepfnf+fft' or opts.model == 'deepfnf+fft_helmholz'):
     outchannels = 6
@@ -160,7 +163,7 @@ with tf.device('/cpu:0'):
                 lvals = [sp_loss, psnr]
                 lnms = ['loss', 'psnr']
                 loss = sp_loss
-            if('deepfnf' == opts.model):# Loss
+            if('deepfnf' == opts.model or 'unet' == opts.model):# Loss
                 denoise = tfu.camera_to_rgb(
                     model_outpt/alpha, example['color_matrix'], example['adapt_matrix'])
                 l2_loss = tfu.l2_loss(denoise, ambient)
@@ -198,6 +201,8 @@ sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 dataset.init_handles(sess)
 
+nparams, nbytes, structure = tfutils.analyze_vars()
+logger.addDict({'nparams':nparams,'nbytes':nbytes,'structure':structure},'model_details')
 #########################################################################
 # Load saved weights if any
 if niter > 0:
@@ -239,6 +244,7 @@ while niter < MAXITER and not ut.stop:
     # Run training step and print losses
     vis_tf,lossdict, losspredict_tf,paramstr = {},{},{},''
     mode=None
+
 
     if niter % opts.val_freq == 0:
         outs = sess.run(
@@ -285,8 +291,8 @@ while niter < MAXITER and not ut.stop:
         visouts = npu.visualize(fetches,opts)
         mtrcs_pred = npu.metrics(fetches['denoise'],fetches['ambient'])
         mtrcs_noisy = npu.metrics(fetches['noisy'],fetches['ambient'])
-        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'images',dim_type='BHWC',text=r'$%s$'%paramstr)
-        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'images_inset',dim_type='BHWC',text=r'$%s$'%paramstr,addinset=True)
+        logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'images',dim_type='BHWC',text=r'$%s$'%paramstr,ltype='filesystem',)
+        # logger.addImage(visouts,npu.labels(mtrcs_pred,mtrcs_noisy,opts),'images_inset',dim_type='BHWC',text=r'$%s$'%paramstr,addinset=True)
         # logger.addMetrics(losses,'train')
     # logger.addMetrics(loss_dict,mode)
     logger.addMetrics(lossdict,mode)
