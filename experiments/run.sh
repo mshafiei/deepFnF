@@ -17,7 +17,7 @@ cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 # conda env create -f req.yml
 conda activate deepfnf
 pip install piq
-pip install scikit-image=0.15.0
+conda install scikit-image=0.15.0
 cp /root/ssh_mount/id_rsa* /root/.ssh/
 chmod 400 ~/.ssh/id_rsa
 # apt update
@@ -36,5 +36,5 @@ imageio.plugins.freeimage.download()
 export LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64:/usr/local/cuda-10.0/:$LD_LIBRARY_PATH
 export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
 echo command:
-echo python3.7 $@
-python3.7 $@
+echo python3 $@
+python3 $@
