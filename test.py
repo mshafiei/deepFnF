@@ -40,7 +40,7 @@ def test(model, model_path, datapath,logger):
     print("Restoring model from " + model_path)
     load_net(model_path, model)
     print('Done\n')
-    erreval = linalg.ErrEval('cuda:1')
+    erreval = linalg.ErrEval('cpu')
     errors = {}
     errors_dict = {}
     for k in range(4):
