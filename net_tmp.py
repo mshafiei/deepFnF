@@ -7,9 +7,11 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, max_lambda,num_basis=90, ksz=15, burst_length=2):
+    def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, max_lambda,num_basis=90, ksz=15, burst_length=2,IMZ=448):
         self.weights = {}
+        self.IMZ = IMZ
         self.model = model
+        self.fixed_lambda = fixed_lamba
         if('fft' in model):
             self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=max_lambda, dtype=tf.float32))
         if(model == 'deepfnf+fft_helmholz'):
@@ -23,6 +25,8 @@ class Net:
         self.ksz = ksz
         self.burst_length = burst_length
         self.noutchannels = outchannels
+        self.unet_nout = outchannels
+        self.aux = {}
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -196,7 +200,7 @@ class Net:
 
         out, skips = self.encode(inp)
         out = self.decode(out, skips)
-        out = self.conv('output', out, 3, relu=False)
+        out = self.conv('output', out, self.unet_nout, relu=False)
         self.out = out
 
     def combine(self):
@@ -215,6 +219,32 @@ class Net:
     def forward_unet(self, inp):
         self.direct_predict(inp)
         return self.out
+    
+    def forward_fft(self, inp):
+        self.direct_predict(inp)
+        lmbda = self.weights['lmbda']
+        if('deepfnf+fft' == self.model):
+            gx = self.out[...,:3]
+            gy = self.out[...,3:]
+        if('deepfnf+fft_helmholz' == self.model):
+            if(not self.fixed_lambda):
+                lambda_phi = self.weights['lambda_phi']
+                lambda_psi = self.weights['lambda_psi']
+            phi = self.out[...,:3]
+            a = self.out[...,3:]
+            phix = tfu.dx_tf(phi)
+            phiy = tfu.dy_tf(phi)
+            ax = tfu.dx_tf(a)
+            ay = tfu.dy_tf(a)
+            gx = tf.math.softplus(lambda_phi) * phix - tf.math.softplus(lambda_psi) * ay
+            gy = tf.math.softplus(lambda_phi) * phiy + tf.math.softplus(lambda_psi) * ax
+        self.aux['gx'] = gx
+        self.aux['gy'] = gy
+        reshape = lambda x :tf.transpose(x,[0,3,1,2])
+        fft_res = tfu.screen_poisson(lmbda,reshape(inp[:, :, :, :3]),reshape(gx), reshape(gy),self.IMZ)
+        # fft_res = gx + gy + noisy_ambient * lmbda
+        fft_res = tf.transpose(fft_res,[0,2,3,1])
+        return fft_res
 
     def forward_deepfnf(self, inp):
         self.predict_coeff(inp)
@@ -242,5 +272,7 @@ class Net:
     def forward(self, inp):
         if(self.model == 'unet'):
             return self.forward_unet(inp)
-        else:
+        elif(self.model == 'deepfnf+fft'):
+            return self.forward_fft(inp)
+        elif(self.model == 'deepfnf'):
             return self.forward_deepfnf(inp)

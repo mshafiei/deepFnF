@@ -135,38 +135,10 @@ with tf.device('/cpu:0'):
                 example['color_matrix'], example['adapt_matrix'])
                 
             if('fft' in opts.model):
-                lmbda = model.weights['lmbda']
-                if('deepfnf+fft' == opts.model):
-                    gx = model_outpt[...,:3]
-                    gy = model_outpt[...,3:]
-                if('deepfnf+fft_helmholz' == opts.model):
-                    if(not opts.fixed_lambda):
-                        lambda_phi = model.weights['lambda_phi']
-                        lambda_psi = model.weights['lambda_psi']
-                    phi = model_outpt[...,:3]
-                    a = model_outpt[...,3:]
-                    phix = tfu.dx_tf(phi)
-                    phiy = tfu.dy_tf(phi)
-                    ax = tfu.dx_tf(a)
-                    ay = tfu.dy_tf(a)
-                    gx = tf.math.softplus(lambda_phi) * phix - tf.math.softplus(lambda_psi) * ay
-                    gy = tf.math.softplus(lambda_phi) * phiy + tf.math.softplus(lambda_psi) * ax
-                if('deepfnf+fft_grad_image' == opts.model):
-                    gx = tfu.dx_tf(model_outpt)
-                    gy = tfu.dy_tf(model_outpt)
-                # screen_poisson = lambda x,y,z,w,u : tf.map_fn(tfu.screen_poisson,([x]*BSZ,y,z,w,u))
-                reshape = lambda x :tf.transpose(x,[0,3,1,2])
-                fft_res = tfu.screen_poisson(lmbda,reshape(noisy_ambient),reshape(gx), reshape(gy),IMSZ)
-                # fft_res = gx + gy + noisy_ambient * lmbda
-                fft_res = tf.transpose(fft_res,[0,2,3,1])
-                dx = tfu.dx_tf(fft_res)
-                dy = tfu.dy_tf(fft_res)
                 denoise = tfu.camera_to_rgb(
-                fft_res/alpha, example['color_matrix'], example['adapt_matrix'])
+                model_outpt/alpha, example['color_matrix'], example['adapt_matrix'])
                 sp_loss = tfu.l2_loss(denoise, ambient)
                 psnr = tfu.get_psnr(denoise, ambient)
-                
-
                 lvals = [sp_loss, psnr]
                 lnms = ['loss', 'psnr']
                 loss = sp_loss
@@ -274,11 +246,13 @@ while niter < MAXITER and not ut.stop:
         mode = 'train'
     if(niter % opts.visualize_freq == 0):
         if('fft' in opts.model):
-            vis_tf.update({'fft_res':fft_res,'gx':gx,'gy':gy,'dx':dx,'dy':dy})
+            dx = tfu.dx_tf(model_outpt)
+            dy = tfu.dy_tf(model_outpt)
+            vis_tf.update({'fft_res':model_outpt,'gx':model.aux['gx'],'gy':model.aux['gy'],'dx':dx,'dy':dy})
             losspredict_tf.update({'lambda':model.weights['lmbda']})
         if('helmholz' in opts.model):
             # pass
-            vis_tf.update({'ax':ax,'ay':ay,'phix':phix,'phiy':phiy})
+            # vis_tf.update({'ax':ax,'ay':ay,'phix':phix,'phiy':phiy})
             if(opts.fixed_lambda):
                 losspredict_tf.update({'lambda_phi':tf.math.softplus(lambda_phi)})
                 losspredict_tf.update({'lambda_psi':tf.math.softplus(lambda_psi)})
