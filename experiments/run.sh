@@ -20,6 +20,7 @@ pip install piq
 conda install scikit-image=0.15.0
 cp /root/ssh_mount/id_rsa* /root/.ssh/
 chmod 400 ~/.ssh/id_rsa
+pip install protobuf==3.19.0
 # apt update
 # apt install -y software-properties-common
 # add-apt-repository -y ppa:deadsnakes/ppa
