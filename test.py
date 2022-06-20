@@ -82,9 +82,9 @@ def test(model, model_path, datapath,logger):
             denoise = np.clip(denoise, 0., 1.).squeeze()
             noisy_wb = np.clip(noisy_wb, 0., 1.).squeeze()
             noisy_flash = np.clip(noisy_flash, 0., 1.).squeeze()
-            if(erreval != None):
-                piq_metrics_pred = erreval.eval(ambient,denoise,dtype='np',imformat='HWC')
-                metrics.update({'msssim':piq_metrics_pred['msssim'],'lpipsVGG':piq_metrics_pred['lpipsVGG'],'lpipsAlex':piq_metrics_pred['lpipsAlex']})
+            # if(erreval != None):
+            #     piq_metrics_pred = erreval.eval(ambient,denoise,dtype='np',imformat='HWC')
+            #     metrics.update({'msssim':piq_metrics_pred['msssim'],'lpipsVGG':piq_metrics_pred['lpipsVGG'],'lpipsAlex':piq_metrics_pred['lpipsAlex']})
             metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'ssim':npu.get_ssim(denoise, ambient)})
             for key,v in metrics.items():
                 if(not(key in metrics_list.keys())):
