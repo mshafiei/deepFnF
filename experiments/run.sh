@@ -16,7 +16,7 @@ unset __conda_setup
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 # conda env create -f req.yml
 conda activate deepfnf
-pip install piq
+pip install piq wandb
 conda install -y opencv scikit-image=0.15.0
 cp /root/ssh_mount/id_rsa* /root/.ssh/
 chmod 400 ~/.ssh/id_rsa
