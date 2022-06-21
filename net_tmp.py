@@ -7,7 +7,7 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self,model,outchannels,min_lmbda_phi,min_lmbda_psi,fixed_lamba, max_lambda,num_basis=90, ksz=15, burst_length=2,IMZ=448):
+    def __init__(self,model,outchannels,lmbda_phi,lmbda_psi,fixed_lamba, max_lambda,num_basis=90, ksz=15, burst_length=2,IMZ=448):
         self.weights = {}
         self.IMZ = IMZ
         self.model = model
@@ -15,8 +15,8 @@ class Net:
         if('fft' in model):
             self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=max_lambda, dtype=tf.float32))
         if(model == 'deepfnf+fft_helmholz'):
-            min_lph = tf.log(tf.exp(min_lmbda_phi) - 1)
-            min_lps = tf.log(tf.exp(min_lmbda_psi) - 1)
+            min_lph = lmbda_phi
+            min_lps = lmbda_psi
             if(not fixed_lamba):
                 self.weights['lambda_phi'] = tf.Variable(min_lph)
                 self.weights['lambda_psi'] = tf.Variable(min_lps)
@@ -236,8 +236,12 @@ class Net:
             phiy = tfu.dy_tf(phi)
             ax = tfu.dx_tf(a)
             ay = tfu.dy_tf(a)
-            gx = tf.math.softplus(lambda_phi) * phix - tf.math.softplus(lambda_psi) * ay
-            gy = tf.math.softplus(lambda_phi) * phiy + tf.math.softplus(lambda_psi) * ax
+            self.aux['phix'] = phix
+            self.aux['phiy'] = phiy
+            self.aux['ax'] = ax
+            self.aux['ay'] = ay
+            gx = lambda_phi * phix - lambda_psi * ay
+            gy = lambda_phi * phiy + lambda_psi * ax
         self.aux['gx'] = gx
         self.aux['gy'] = gy
         reshape = lambda x :tf.transpose(x,[0,3,1,2])
@@ -272,7 +276,7 @@ class Net:
     def forward(self, inp):
         if(self.model == 'unet'):
             return self.forward_unet(inp)
-        elif(self.model == 'deepfnf+fft'):
+        elif(self.model == 'deepfnf+fft' or self.model == 'deepfnf+fft_helmholz'):
             return self.forward_fft(inp)
         elif(self.model == 'deepfnf'):
             return self.forward_deepfnf(inp)

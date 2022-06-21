@@ -24,8 +24,8 @@ parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
 parser.add_argument('--weight_file', type=str, default='wts/', help='Weight dir')
 parser.add_argument('--visualize_freq', type=int, default=10001, help='How many iterations before visualization')
 parser.add_argument('--val_freq', type=int, default=10000, help='How many iterations before visualization')
-parser.add_argument('--min_lmbda_phi', type=float, default=1., help='The min value of lambda phi')
-parser.add_argument('--min_lmbda_psi', type=float, default=1., help='The min value of lambda psi')
+parser.add_argument('--lmbda_phi', type=float, default=1., help='The min value of lambda phi')
+parser.add_argument('--lmbda_psi', type=float, default=1., help='The min value of lambda psi')
 parser.add_argument('--fixed_lambda', action='store_true',help='Do not change the delta value')
 parser.add_argument('--max_lambda', type=float,default=0.001,help='Maximum lambda for initialization')
 parser.add_argument('--save_freq', type=int,default=100000,help='How often save parameters')
@@ -48,8 +48,8 @@ MAXITER = 1.5e6
 VALFREQ = opts.val_freq
 SAVEFREQ = opts.save_freq
 
-min_lph = np.log(np.exp(opts.min_lmbda_phi) - 1)
-min_lps = np.log(np.exp(opts.min_lmbda_psi) - 1)
+min_lph = opts.lmbda_phi
+min_lps = opts.lmbda_psi
 if(opts.fixed_lambda):
     lambda_phi = tf.constant(np.float32(min_lph))
     lambda_psi = tf.constant(np.float32(min_lps))
@@ -61,7 +61,7 @@ if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image' or opts.mod
     outchannels = 3
 elif(opts.model == 'deepfnf+fft' or opts.model == 'deepfnf+fft_helmholz'):
     outchannels = 6
-model = net_tmp.Net(opts.model,outchannels,opts.min_lmbda_phi,opts.min_lmbda_psi,opts.fixed_lambda,opts.max_lambda,ksz=15, num_basis=90, burst_length=2)
+model = net_tmp.Net(opts.model,outchannels,opts.lmbda_phi,opts.lmbda_psi,opts.fixed_lambda,opts.max_lambda,ksz=15, num_basis=90, burst_length=2)
 if(opts.mode == 'test'):
     tf.enable_eager_execution()
     test(model, opts.weight_file, opts.TestDataPath,logger)
@@ -259,6 +259,8 @@ while niter < MAXITER and not ut.stop:
             else:
                 losspredict_tf.update({'lambda_phi':tf.math.softplus(model.weights['lambda_phi'])})
                 losspredict_tf.update({'lambda_psi':tf.math.softplus(model.weights['lambda_psi'])})
+            vis_tf.update({'ax':model.aux['ax'],'ay':model.aux['ay'],'phix':model.aux['phix'],'phiy':model.aux['phiy']})
+
         if('grad_image' in opts.model):
             vis_tf.update({'g':model_outpt})
         lossdict = sess.run(losspredict_tf) if len(losspredict_tf) > 0 else {}
@@ -281,7 +283,7 @@ while niter < MAXITER and not ut.stop:
     niter = niter + opts.ngpus
 
     # Save model weights if needed
-    if niter % SAVEFREQ == 0:
+    if niter > 0 and niter % SAVEFREQ == 0:
         mfn = wts + "/iter_%06d.model.npz" % niter
         sfn = wts + "/iter_%06d.state.npz" % niter
 
@@ -306,3 +308,4 @@ if msave.iter < niter:
     ut.mprint("Done!")
     msave.clean(every=SAVEFREQ, last=1)
     ssave.clean(every=SAVEFREQ, last=1)
+
