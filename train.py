@@ -18,7 +18,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--TestDataPath', type=str, default='/home/mohammad/Projects/optimizer/DifferentiableSolver/data/testset_nojitter', help='testset path')
 parser.add_argument('--TLIST', type=str, default='data/train_1600.txt', help='Training dataset filename')
 parser.add_argument('--VPATH', type=str, default='data/valset', help='Validation dataset')
-parser.add_argument('--model', type=str, default='deepfnf+fft_helmholz',choices=['unet','deepfnf','deepfnf+fft','deepfnf+fft_grad_image','deepfnf+fft_helmholz'], help='Validation dataset')
+parser.add_argument('--model', type=str, default='deepfnf+fft_helmholz',choices=['unet','deepfnf','deepfnf+fft','deepfnf+fft_highdim','deepfnf+fft_grad_image','deepfnf+fft_helmholz','deepfnf+fft_helmholz_highdim'], help='Validation dataset')
+parser.add_argument('--outchannels', type=int, default=3, help='Number of the output channels of the UNet')
 parser.add_argument('--ngpus', type=int, default=1, help='use how many gpus')
 parser.add_argument('--weight_dir', type=str, default='wts', help='Weight dir')
 parser.add_argument('--weight_file', type=str, default='wts/', help='Weight dir')
@@ -57,11 +58,8 @@ if(opts.fixed_lambda):
 wts = opts.weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
-if(opts.model == 'deepfnf' or opts.model == 'deepfnf+fft_grad_image' or opts.model == 'unet'):
-    outchannels = 3
-elif(opts.model == 'deepfnf+fft' or opts.model == 'deepfnf+fft_helmholz'):
-    outchannels = 6
-model = net_tmp.Net(opts.model,outchannels,opts.lmbda_phi,opts.lmbda_psi,opts.fixed_lambda,opts.max_lambda,ksz=15, num_basis=90, burst_length=2)
+
+model = net_tmp.Net(opts.model,opts.outchannels,opts.lmbda_phi,opts.lmbda_psi,opts.fixed_lambda,opts.max_lambda,ksz=15, num_basis=90, burst_length=2)
 if(opts.mode == 'test'):
     tf.enable_eager_execution()
     test(model, opts.weight_file, opts.TestDataPath,logger)
@@ -180,7 +178,8 @@ sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 dataset.init_handles(sess)
 
-nparams, nbytes, structure = tfutils.analyze_vars()
+nparams, nbytes, _ = tfutils.analyze_vars()
+structure = model.weights_print()
 logger.addDict({'nparams':nparams,'nbytes':nbytes,'structure':structure},'model_details')
 #########################################################################
 # Load saved weights if any

@@ -61,9 +61,9 @@ def visualize(inpt,opts):
 
     if('fft' in opts.model):
         out['fft_res'] = wb(np.abs(inpt['fft_res'])/inpt['alpha'])
-        out['gx'] = wb(np.abs(inpt['gx'])/inpt['alpha'])
+        out['gx'] = wb(np.abs(inpt['gx'][...,:3])/inpt['alpha'])
         out['dx'] = wb(np.abs(inpt['dx'])/inpt['alpha'])
-        out['gy'] = wb(np.abs(inpt['gy'])/inpt['alpha'])
+        out['gy'] = wb(np.abs(inpt['gy'][...,:3])/inpt['alpha'])
         out['dy'] = wb(np.abs(inpt['dy'])/inpt['alpha'])
 
     if(opts.model == 'deepfnf+fft_grad_image'):

@@ -14,7 +14,7 @@ class Net:
         self.fixed_lambda = fixed_lamba
         if('fft' in model):
             self.weights['lmbda'] = tf.Variable(tf.random_uniform([1], minval=0, maxval=max_lambda, dtype=tf.float32))
-        if(model == 'deepfnf+fft_helmholz'):
+        if('helmholz' in model):
             min_lph = lmbda_phi
             min_lps = lmbda_psi
             if(not fixed_lamba):
@@ -25,9 +25,15 @@ class Net:
         self.ksz = ksz
         self.burst_length = burst_length
         self.noutchannels = outchannels
-        self.unet_nout = outchannels
         self.aux = {}
 
+    def weights_print(self):
+        structure = ''
+        for k in self.weights.keys():
+            shape = self.weights[k].shape
+            structure += k + ' ' + 'x'.join(['%s' % str(i) for i in shape]) + '\n'
+        return structure
+            
     def conv(
             self, name, inp, outch, ksz=3,
             stride=1, relu=True, pad='SAME', activation_name=None):
@@ -200,7 +206,7 @@ class Net:
 
         out, skips = self.encode(inp)
         out = self.decode(out, skips)
-        out = self.conv('output', out, self.unet_nout, relu=False)
+        out = self.conv('output', out, self.noutchannels*2, relu=False)
         self.out = out
 
     def combine(self):
@@ -220,18 +226,17 @@ class Net:
         self.direct_predict(inp)
         return self.out
     
-    def forward_fft(self, inp):
-        self.direct_predict(inp)
+    def fft(self,noisy,dx,dy):
         lmbda = self.weights['lmbda']
-        if('deepfnf+fft' == self.model):
-            gx = self.out[...,:3]
-            gy = self.out[...,3:]
-        if('deepfnf+fft_helmholz' == self.model):
+        if('deepfnf+fft' == self.model or 'deepfnf+fft_highdim' == self.model):
+            gx = dx
+            gy = dy
+        if('deepfnf+fft_helmholz' == self.model or 'deepfnf+fft_helmholz_highdim' == self.model):
             if(not self.fixed_lambda):
                 lambda_phi = self.weights['lambda_phi']
                 lambda_psi = self.weights['lambda_psi']
-            phi = self.out[...,:3]
-            a = self.out[...,3:]
+            phi = dx
+            a = dy
             phix = tfu.dx_tf(phi)
             phiy = tfu.dy_tf(phi)
             ax = tfu.dx_tf(a)
@@ -245,10 +250,42 @@ class Net:
         self.aux['gx'] = gx
         self.aux['gy'] = gy
         reshape = lambda x :tf.transpose(x,[0,3,1,2])
-        fft_res = tfu.screen_poisson(lmbda,reshape(inp[:, :, :, :3]),reshape(gx), reshape(gy),self.IMZ)
+        fft_res = tfu.screen_poisson(lmbda,reshape(noisy),reshape(gx), reshape(gy),self.IMZ)
         # fft_res = gx + gy + noisy_ambient * lmbda
         fft_res = tf.transpose(fft_res,[0,2,3,1])
         return fft_res
+
+    def forward_fft(self, inp):
+        self.direct_predict(inp)
+        fft_res = self.fft(inp)
+        return fft_res
+    
+    def encode_fft(self, inp):
+        out = self.conv('enc1',inp,self.noutchannels)
+        out = self.conv('enc2',out,self.noutchannels)
+        out = self.conv('enc3',out,self.noutchannels)
+        out = self.conv('enc4',out,self.noutchannels)
+        out = self.conv('enc5',out,self.noutchannels)
+        out = self.conv('enc6',out,self.noutchannels)
+        out = self.conv('enc7',out,self.noutchannels)
+        return out
+
+    def decode_fft(self, inp):
+        out = self.conv('dec1',inp,self.noutchannels)
+        out = self.conv('dec2',out,self.noutchannels)
+        out = self.conv('dec3',out,self.noutchannels)
+        out = self.conv('dec4',out,self.noutchannels)
+        out = self.conv('dec5',out,self.noutchannels)
+        out = self.conv('dec6',out,self.noutchannels)
+        out = self.conv('dec7',out,3)
+        return out
+
+    def forward_highdim(self, inp):
+        encoded_noisy = self.encode_fft(inp[:, :, :, :3])
+        self.direct_predict(inp)
+        Ihat_denoise = self.fft(encoded_noisy,self.out[...,:self.noutchannels],self.out[...,self.noutchannels:])
+        return self.decode_fft(Ihat_denoise)
+        
 
     def forward_deepfnf(self, inp):
         self.predict_coeff(inp)
@@ -278,5 +315,7 @@ class Net:
             return self.forward_unet(inp)
         elif(self.model == 'deepfnf+fft' or self.model == 'deepfnf+fft_helmholz'):
             return self.forward_fft(inp)
+        elif(self.model == 'deepfnf+fft_highdim' or self.model == 'deepfnf+fft_helmholz_highdim'):
+            return self.forward_highdim(inp)
         elif(self.model == 'deepfnf'):
             return self.forward_deepfnf(inp)
