@@ -1,5 +1,5 @@
 from typing import OrderedDict
-from skimage.measure import compare_ssim
+from skimage.metrics import structural_similarity
 import numpy as np
 import imageio
 import utils.tf_utils as tfu
@@ -33,7 +33,7 @@ def metrics(preds,gts,ignorelist='ssim'):
     return mtrs
 
 def get_ssim(pred, gt):
-    ssim = compare_ssim(
+    ssim = structural_similarity(
         pred,
         gt,
         win_size=11,

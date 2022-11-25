@@ -1,0 +1,12 @@
+{
+    "0":
+    {
+        "name":"deepfnf",
+        "values":
+        {
+        "expname":"deepfnf",
+        "mode":"test",
+        "logdir":"logs/"
+        }
+    }
+}
