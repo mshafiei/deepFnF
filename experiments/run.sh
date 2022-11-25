@@ -21,6 +21,7 @@ conda install -y opencv
 cp /root/ssh_mount/id_rsa* /root/.ssh/
 chmod 400 ~/.ssh/id_rsa
 pip install protobuf==3.19.0 scikit-image==0.19.1
+pip install tensorflow==1.13.1 tensorflow-gpu==1.13.1
 # apt update
 # apt install -y software-properties-common
 # add-apt-repository -y ppa:deadsnakes/ppa
