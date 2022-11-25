@@ -17,10 +17,10 @@ cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 # conda env create -f req.yml
 conda activate deepfnf
 pip install piq wandb tensorboardX jaxlib jax lpips
-conda install -y opencv scikit-image=0.19.1
+conda install -y opencv
 cp /root/ssh_mount/id_rsa* /root/.ssh/
 chmod 400 ~/.ssh/id_rsa
-pip install protobuf==3.19.0
+pip install protobuf==3.19.0 scikit-image==0.19.1
 # apt update
 # apt install -y software-properties-common
 # add-apt-repository -y ppa:deadsnakes/ppa
