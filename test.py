@@ -8,11 +8,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 
-import net
 import utils.utils as ut
 import utils.tf_utils as tfu
-import cvgutils.Viz as Viz
-import cvgutils.Linalg as linalg
 import tqdm
 # tf.enable_eager_execution()
 
@@ -40,7 +37,6 @@ def test(model, model_path, datapath,logger):
     print("Restoring model from " + model_path)
     load_net(model_path, model)
     print('Done\n')
-    erreval = linalg.ErrEval('cpu')
     errors = {}
     errors_dict = {}
     for k in range(4):

@@ -2,6 +2,7 @@
     "0":
     {
         "name":"deepfnf",
+        "method":"deepfnf",
         "values":
         {
         "expname":"deepfnf",

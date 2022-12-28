@@ -1,6 +1,6 @@
 from cvgutils.experimentManager import execute_experiments
 import os
-from arguments import parse_arguments_deepfnf
+from arguments_deepfnf import parse_arguments_deepfnf
 local = False
 experiments_fn = os.path.join(os.getcwd(),"experiments_params.json")
 if local:
@@ -9,5 +9,8 @@ if local:
 else:
     testsettings_fn = os.path.join(os.getcwd(),"testsettings_server.json")
     method_py = '/mshvol2/users/mohammad/optimization/deepfnf_fork/train.py'
-
-execute_experiments(parse_arguments_deepfnf, testsettings_fn, experiments_fn, method_py, local,max_count=2)
+# test_keys=["0","1","2","3","4"]
+test_keys=["0"]
+exp_keys=["0"]
+methods={"deepfnf":{"arg_parser":parse_arguments_deepfnf}}
+execute_experiments(methods, testsettings_fn, experiments_fn, method_py, local=local, exp_keys=exp_keys,test_keys=test_keys)

@@ -1,3 +1,7 @@
 {
-    "set0":{"TESTPATH":"/home/mohammad/Projects/DifferentiableSolver/data/testsets/0","test_suffix":"0"}
+    "0":{"TESTPATH":"/home/mohammad/Projects/DifferentiableSolver/data/testsets/0","test_suffix":"0"},
+    "1":{"TESTPATH":"/home/mohammad/Projects/DifferentiableSolver/data/testsets/1","test_suffix":"1"},
+    "2":{"TESTPATH":"/home/mohammad/Projects/DifferentiableSolver/data/testsets/2","test_suffix":"2"},
+    "3":{"TESTPATH":"/home/mohammad/Projects/DifferentiableSolver/data/testsets/3","test_suffix":"3"},
+    "4":{"TESTPATH":"/home/mohammad/Projects/DifferentiableSolver/data/testsets/4","test_suffix":"4"}
 }

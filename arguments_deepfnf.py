@@ -2,7 +2,13 @@ import cvgutils.Viz as Viz
 import argparse
 
 def parse_arguments_deepfnf():
-
+    def str_to_bool(value):
+        if value.lower() in {'false', 'f', '0', 'no', 'n'}:
+            return False
+        elif value.lower() in {'true', 't', '1', 'yes', 'y'}:
+            return True
+        raise ValueError(f'{value} is not a valid boolean value')
+        
     parser = argparse.ArgumentParser()
     parser.add_argument('--TESTPATH', type=str, default='/home/mohammad/Projects/optimizer/DifferentiableSolver/data/testset_nojitter', help='testset path')
     parser.add_argument('--TLIST', type=str, default='data/train.txt', help='Training dataset filename')
@@ -16,7 +22,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--val_freq', type=int, default=10000, help='How many iterations before visualization')
     parser.add_argument('--lmbda_phi', type=float, default=1., help='The min value of lambda phi')
     parser.add_argument('--lmbda_psi', type=float, default=1., help='The min value of lambda psi')
-    parser.add_argument('--fixed_lambda', action='store_true',help='Do not change the delta value')
+    parser.add_argument('--fixed_lambda', type=str_to_bool,default=False,nargs='?', const=True,help='Do not change the delta value')
     parser.add_argument('--max_lambda', type=float,default=0.001,help='Maximum lambda for initialization')
     parser.add_argument('--save_freq', type=int,default=100000,help='How often save parameters')
     parser.add_argument('--mode', default='train', type=str,choices=['train','test'],help='Should we train or test the model?')

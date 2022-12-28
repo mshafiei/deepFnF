@@ -14,7 +14,7 @@ from utils.dataset import Dataset
 import cvgutils.Viz as Viz
 import cvgutils.nn.tfUtils.utils as tfutils
 from test import test
-from arguments import parse_arguments_deepfnf
+from arguments_deepfnf import parse_arguments_deepfnf
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
 logger = Viz.logger(opts,opts.__dict__)
@@ -157,7 +157,8 @@ with tf.device('/cpu:0'):
 # Start TF session
 config=tf.ConfigProto(
     allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = 0.85
+config.gpu_options.allow_growth=True
+# config.gpu_options.per_process_gpu_memory_fraction = 0.85
 sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 dataset.init_handles(sess)

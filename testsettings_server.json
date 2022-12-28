@@ -1,4 +1,7 @@
 {
-    "set0":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/0","test_suffix":"0"},
-    "set1":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/1","test_suffix":"1"}
+    "0":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/0","test_suffix":"0"},
+    "1":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/1","test_suffix":"1"},
+    "2":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/2","test_suffix":"2"},
+    "3":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/3","test_suffix":"3"},
+    "4":{"TESTPATH":"/mshvol2/users/mohammad/optimization/DifferentiableSolver/data/testsets/4","test_suffix":"4"}
 }

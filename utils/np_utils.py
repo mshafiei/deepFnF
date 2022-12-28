@@ -1,4 +1,4 @@
-from typing import OrderedDict
+from collections import OrderedDict
 from skimage.metrics import structural_similarity
 import numpy as np
 import imageio
