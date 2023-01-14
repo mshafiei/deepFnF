@@ -10,7 +10,7 @@ else:
     testsettings_fn = os.path.join(os.getcwd(),"testsettings_server.json")
     method_py = '/mshvol2/users/mohammad/optimization/deepfnf_fork/train.py'
 # test_keys=["0","1","2","3","4"]
-test_keys=["0"]
+test_keys=["1","2","3","4"]
 exp_keys=["0"]
 methods={"deepfnf":{"arg_parser":parse_arguments_deepfnf}}
 execute_experiments(methods, testsettings_fn, experiments_fn, method_py, local=local, exp_keys=exp_keys,test_keys=test_keys)

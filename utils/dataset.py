@@ -139,7 +139,7 @@ class Dataset:
             self, train_list, val_path,
             bsz=32, psz=512, jitter=2,
             min_scale=0.98, max_scale=1.02, theta=np.deg2rad(0.5),
-            ngpus=1, nthreads=4, onfly_val=False):
+            ngpus=1, nthreads=4, onfly_val=False,displacement=True):
         self.train = TrainSet(
             train_list, bsz, psz, jitter,
             min_scale, max_scale, theta, ngpus, nthreads)
