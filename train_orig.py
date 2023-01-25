@@ -6,7 +6,7 @@ import argparse
 import utils.np_utils as npu
 import numpy as np
 import tensorflow as tf
-
+from test import test
 import net
 import utils.utils as ut
 import utils.tf_utils as tfu
@@ -18,6 +18,7 @@ parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
 logger = Viz.logger(opts,opts.__dict__)
 _, weight_dir = logger.path_parse('train')
+opts.weight_file = os.path.join(weight_dir,opts.weight_file)
 
 print("weights_dir: ",weight_dir)
 opts = logger.opts
@@ -36,7 +37,10 @@ wts = weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
 model = net.Net(ksz=15, num_basis=90, burst_length=2)
-
+if(opts.mode == 'test'):
+    tf.enable_eager_execution()
+    test(model, opts.weight_file, opts.TESTPATH,logger)
+    exit(0)
 
 def get_lr(niter):
     if niter < DROP[0]:
