@@ -13,6 +13,7 @@ import utils.tf_utils as tfu
 from utils.dataset import Dataset
 from arguments_deepfnf import parse_arguments_deepfnf
 import cvgutils.Viz as Viz
+# import tensorflow.contrib.eager as tfe
 
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
@@ -38,7 +39,13 @@ if not os.path.exists(wts):
     os.makedirs(wts)
 model = net.Net(ksz=15, num_basis=90, burst_length=2)
 if(opts.mode == 'test'):
+    def load_net(fn, model):
+        wts = np.load(fn)
+        for k, v in wts.items():
+            model.weights[k] = tfe.Variable(v)
     tf.enable_eager_execution()
+    print("Restoring model from " + opts.weight_file)
+    load_net(opts.weight_file, model)
     test(model, opts.weight_file, opts.TESTPATH,logger)
     exit(0)
 

@@ -1,4 +1,5 @@
-#!/bin/bash
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 # conda activate deepfnf
 # pip3 install scikit-image
