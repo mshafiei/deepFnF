@@ -37,7 +37,7 @@ wts = weight_dir
 
 if not os.path.exists(wts):
     os.makedirs(wts)
-model = net.Net(ksz=15, num_basis=90, burst_length=2)
+model = net.Net(ksz=15, num_basis=90, burst_length=2,channels_count_factor=opts.channels_count_factor)
 if(opts.mode == 'test'):
     def load_net(fn, model):
         wts = np.load(fn)
@@ -167,6 +167,12 @@ if niter > 0:
 stop = False
 ut.mprint("Starting from Iteration %d" % niter)
 dataset.swap_train(sess)
+summary = '\n'.join(['%s %s' % (i, model.weights[i].shape) for i in model.weights] + ['total parameter count = %i' % np.sum([np.prod(model.weights[i].shape) for i in model.weights]) ])
+logger.addString(summary,'model_summary')
+print("===================== Model summary =====================")
+print(summary)
+print("===================== Model summary =====================")
+
 
 while niter < MAXITER and not ut.stop:
 

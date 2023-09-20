@@ -1,3 +1,4 @@
+#!/bin/bash
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
@@ -6,6 +7,9 @@ cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
+pip3 install pynvml IPython
+pip install --upgrade "jax[cpu]"
+
 export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
 pip3 install pynvml
 echo command:

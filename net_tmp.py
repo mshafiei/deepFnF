@@ -319,3 +319,8 @@ class Net:
             return self.forward_highdim(inp)
         elif(self.model == 'deepfnf'):
             return self.forward_deepfnf(inp)
+        elif(self.model == 'deepfnfCascade'):
+            out1 = self.forward_deepfnf(inp)
+            #combine inp+out
+            out2 = self.forward_deepfnf2(out1)
+        

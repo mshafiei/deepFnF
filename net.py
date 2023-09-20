@@ -7,12 +7,14 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2):
+    def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
         self.ksz = ksz
         self.burst_length = burst_length
+        self.channels_count_factor = channels_count_factor
+        self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -124,27 +126,27 @@ class Net:
     def encode(self, out, pfx=''):
         out = self.conv(pfx + 'inp', out, 64)
 
-        out, d1 = self.down_block(out, 64, pfx + 'down1')
-        out, d2 = self.down_block(out, 128, pfx + 'down2')
-        out, d3 = self.down_block(out, 256, pfx + 'down3')
-        out, d4 = self.down_block(out, 512, pfx + 'down4')
-        out, d5 = self.down_block(out, 1024, pfx + 'down5')
+        out, d1 = self.down_block(out, self.channel_count(64  ), pfx + 'down1')
+        out, d2 = self.down_block(out, self.channel_count(128 ), pfx + 'down2')
+        out, d3 = self.down_block(out, self.channel_count(256 ), pfx + 'down3')
+        out, d4 = self.down_block(out, self.channel_count(512 ), pfx + 'down4')
+        out, d5 = self.down_block(out, self.channel_count(1024), pfx + 'down5')
 
-        out = self.conv(pfx + 'bottleneck_1', out, 1024)
-        out = self.conv(pfx + 'bottleneck_2', out, 1024,
+        out = self.conv(pfx + 'bottleneck_1', out, self.channel_count(1024))
+        out = self.conv(pfx + 'bottleneck_2', out, self.channel_count(1024),
                         activation_name=pfx + 'bottleneck')
         return out, [d1, d2, d3, d4, d5]
 
     def decode(self, out, skips, pfx=''):
         d1, d2, d3, d4, d5 = skips
-        out = self.up_block(out, 512, d5, pfx + 'up1')
-        out = self.up_block(out, 256, d4, pfx + 'up2')
-        out = self.up_block(out, 128, d3, pfx + 'up3')
-        out = self.up_block(out, 64, d2, pfx + 'up4')
-        out = self.up_block(out, 64, d1, pfx + 'up5')
+        out = self.up_block(out, self.channel_count(512), d5, pfx + 'up1')
+        out = self.up_block(out, self.channel_count(256), d4, pfx + 'up2')
+        out = self.up_block(out, self.channel_count(128), d3, pfx + 'up3')
+        out = self.up_block(out, self.channel_count(64 ), d2, pfx + 'up4')
+        out = self.up_block(out, self.channel_count(64 ), d1, pfx + 'up5')
 
-        out = self.conv(pfx + 'end_1', out, 64)
-        out = self.conv(pfx + 'end_2', out, 64, activation_name=pfx + 'end')
+        out = self.conv(pfx + 'end_1', out, self.channel_count(64))
+        out = self.conv(pfx + 'end_2', out, self.channel_count(64), activation_name=pfx + 'end')
 
         return out
 
@@ -154,15 +156,15 @@ class Net:
         bottleneck = self.activations['bottleneck']
         out = tf.reduce_mean(bottleneck, axis=[1, 2], keepdims=True)  # 1x1
         out = self.kernel_up_block(
-            out, 512, self.activations['skip_down5'], 'k_up1')  # 2x2
+            out, self.channel_count(512,), self.activations['skip_down5'], 'k_up1')  # 2x2
         out = self.kernel_up_block(
-            out, 256, self.activations['skip_down4'], 'k_up2')  # 4x4
+            out, self.channel_count(256,), self.activations['skip_down4'], 'k_up2')  # 4x4
         out = self.kernel_up_block(
-            out, 256, self.activations['skip_down3'], 'k_up3')  # 8x8
+            out, self.channel_count(256,), self.activations['skip_down3'], 'k_up3')  # 8x8
         out = self.kernel_up_block(
-            out, 128, self.activations['skip_down2'], 'k_up4')  # 16x16
-        out = self.conv('k_conv', out, 128, ksz=2, stride=1, pad='VALID')
-        out = self.conv('k_output_1', out, 128)
+            out, self.channel_count(128), self.activations['skip_down2'], 'k_up4')  # 16x16
+        out = self.conv('k_conv', out, self.channel_count(128), ksz=2, stride=1, pad='VALID')
+        out = self.conv('k_output_1', out, self.channel_count(128))
         out = self.conv('k_output_2', out, 3 * 2 * self.num_basis, relu=False)
         out = tf.reshape(
             out, [-1, self.ksz * self.ksz * 3 * 2, self.num_basis])
