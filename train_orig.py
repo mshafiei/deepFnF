@@ -8,12 +8,13 @@ import numpy as np
 import tensorflow as tf
 from test import test
 import net
+import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset import Dataset
 from arguments_deepfnf import parse_arguments_deepfnf
 import cvgutils.Viz as Viz
-# import tensorflow.contrib.eager as tfe
+import tensorflow.contrib.eager as tfe
 
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
@@ -37,7 +38,10 @@ wts = weight_dir
 
 if not os.path.exists(wts):
     os.makedirs(wts)
-model = net.Net(ksz=15, num_basis=90, burst_length=2,channels_count_factor=opts.channels_count_factor)
+if(opts.model == 'deepfnf'):
+    model = net.Net(ksz=15, num_basis=90, burst_length=2,channels_count_factor=opts.channels_count_factor)
+elif(opts.model == 'unet'):
+    model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
 if(opts.mode == 'test'):
     def load_net(fn, model):
         wts = np.load(fn)

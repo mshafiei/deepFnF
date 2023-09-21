@@ -11,6 +11,7 @@ import tensorflow as tf
 import utils.utils as ut
 import utils.tf_utils as tfu
 import tqdm
+import time
 # tf.enable_eager_execution()
 
 # parser = argparse.ArgumentParser()
@@ -52,7 +53,10 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
         noisy, data['sig_read'], data['sig_shot'])
     net_input = tf.concat([noisy, noise_std], axis=-1)
 
+    start = time.time()
     denoise = model.forward(net_input)
+    end = time.time()
+    print('forward pass takes ', end - start, 'ms')
     denoise = denoise / alpha
 
     ambient = tfu.camera_to_rgb(
