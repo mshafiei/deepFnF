@@ -113,7 +113,7 @@ def test(model, model_path, datapath,logger):
         for k in range(4):
             metrics = {}
             metrics_list = {}
-            for c in tqdm.trange(0,128,10):
+            for c in tqdm.trange(0,128,1):
                 test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors)
     else:
         metrics = {}
