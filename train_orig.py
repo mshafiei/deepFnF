@@ -39,7 +39,7 @@ wts = weight_dir
 if not os.path.exists(wts):
     os.makedirs(wts)
 if(opts.model == 'deepfnf'):
-    model = net.Net(ksz=15, num_basis=90, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
 elif(opts.model == 'unet'):
     model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
 if(opts.mode == 'test'):
@@ -85,7 +85,7 @@ with tf.device('/cpu:0'):
     tower_grads = []
     tower_loss, tower_lvals = [], []
     for i in range(opts.ngpus):
-        with tf.device('/gpu:%d' % i):
+        with tf.device('/cpu:%d' % i):
             example = dataset.batches[i]
 
             alpha = example['alpha'][:, None, None, None]
@@ -136,7 +136,7 @@ with tf.device('/cpu:0'):
             tower_grads.append(grads)
 
     # Update step
-    with tf.device('/gpu:0'):
+    with tf.device('/cpu:0'):
         grads = ut.average_gradients(tower_grads)
         tStep = opt.apply_gradients(grads)
 
@@ -204,12 +204,19 @@ while niter < MAXITER and not ut.stop:
         )
         ut.vprint(niter, tnms, outs[0].tolist())
         ut.vprint(niter, ['lr'], [get_lr(niter)])
+        if(type(outs[0].tolist()[0]) == float):
+            logger.addScalar(outs[0].tolist()[0],'loss','val')
+        if(type(outs[0].tolist()[-1]) == float):
+            logger.addScalar(outs[0].tolist()[0],'psnr','val')
     else:
         outs = sess.run(
             [loss, tStep],
             feed_dict={lr: get_lr(niter), global_step: niter}
         )
         ut.vprint(niter, ['loss.t'], [outs[0]])
+        if(type(outs[0]) == np.float32):
+            logger.addScalar(outs[0],'loss')
+    logger.takeStep()
 
     niter = niter + opts.ngpus
 

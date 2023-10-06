@@ -124,7 +124,7 @@ class Net:
 
 
     def encode(self, out, pfx=''):
-        out = self.conv(pfx + 'inp', out, 64)
+        out = self.conv(pfx + 'inp', out, self.channel_count(64))
 
         out, d1 = self.down_block(out, self.channel_count(64  ), pfx + 'down1')
         out, d2 = self.down_block(out, self.channel_count(128 ), pfx + 'down2')
