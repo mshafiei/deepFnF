@@ -14,24 +14,8 @@ import tqdm
 import time
 # tf.enable_eager_execution()
 
-# parser = argparse.ArgumentParser()
-# parser.add_argument(
-#     '--wts', default='wts/model.npz', help='path to trianed model')
-# parser = Viz.logger.parse_arguments(parser)
-# opts = parser.parse_args()
-
-# logger = Viz.logger(opts,opts.__dict__)
-# opts = logger.opts
-
-
-
-
-# datapath = '/home/mohammad/Projects/optimizer/DifferentiableSolver/data/testset_nojitter'
-# model_path = opts.wts
-
-# model = net.Net(ksz=15, num_basis=90, burst_length=2)
-
-def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
+def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
+    
     data = np.load('%s/%d/%d.npz' % (datapath, k, c))
     alpha = data['alpha'][None, None, None, None]
     ambient = data['ambient']
@@ -55,6 +39,48 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
 
     start = time.time()
     denoise = model.forward(net_input)
+
+    
+    opts = tf.profiler.ProfileOptionBuilder.float_operation()   
+    g, run_meta = Gs
+    flops = tf.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
+    gflops = flops.total_float_ops/(1024*1024*1024)
+    nparams = int(np.sum([np.prod(model.weights[i].shape) for i in model.weights]))
+    
+    return {"gflops":gflops,"nparams":nparams}
+
+def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
+    
+    data = np.load('%s/%d/%d.npz' % (datapath, k, c))
+    alpha = data['alpha'][None, None, None, None]
+    ambient = data['ambient']
+    dimmed_ambient, _ = tfu.dim_image(data['ambient'], alpha=alpha)
+    dimmed_warped_ambient, _ = tfu.dim_image(
+        data['warped_ambient'], alpha=alpha)
+
+    # Make the flash brighter by increasing the brightness of the
+    # flash-only image.
+    flash = data['flash_only'] * ut.FLASH_STRENGTH + dimmed_ambient
+    warped_flash = data['warped_flash_only'] * \
+        ut.FLASH_STRENGTH + dimmed_warped_ambient
+
+    noisy_ambient = data['noisy_ambient']
+    noisy_flash = data['noisy_warped_flash']
+    # noisy_flash = warped_flash[0,0,0,0,:,:,:,:]
+    noisy = tf.concat([noisy_ambient, noisy_flash], axis=-1)
+    noise_std = tfu.estimate_std(
+        noisy, data['sig_read'], data['sig_shot'])
+    net_input = tf.concat([noisy, noise_std], axis=-1)
+
+    start = time.time()
+    denoise = model.forward(net_input)
+
+    
+    opts = tf.profiler.ProfileOptionBuilder.float_operation()   
+    g, run_meta = Gs
+    flops = tf.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
+    gflops = flops.total_float_ops/(1024*1024*1024)
+
     end = time.time()
     print('forward pass takes ', end - start, 'ms')
     denoise = denoise / alpha
@@ -99,7 +125,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     errors['Level %d' % (4 - k)] = ', '.join(errstr)
     print(errors['Level %d' % (4 - k)])
 
-def test(model, model_path, datapath,logger):
+def test(model, model_path, datapath,logger,g):
     print('Done\n')
     k_val = None
     i_val = None
@@ -109,12 +135,17 @@ def test(model, model_path, datapath,logger):
         i_val = idx % 128
     errors = {}
     errors_dict = {}
+    metrics_tmp = {}
+    metrics_list_tmp = {}
+    stats = test_idx_model_stats(datapath,0,0,metrics_tmp,metrics_list_tmp,logger,model,errors_dict,errors,g)
+    logger.dumpDictJson(stats,'model_stats','train')
+
     if(k_val == None or i_val == None):
         for k in range(4):
             metrics = {}
             metrics_list = {}
             for c in tqdm.trange(0,128,1):
-                test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors)
+                test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,g)
     else:
         metrics = {}
         metrics_list = {}

@@ -15,43 +15,48 @@ from utils.dataset import Dataset
 from arguments_deepfnf import parse_arguments_deepfnf
 import cvgutils.Viz as Viz
 import tensorflow.contrib.eager as tfe
+# tf.compat.v1.disable_v2_behavior()
+tf.compat.v1.disable_eager_execution()
+g = tf.Graph()
+run_meta = tf.RunMetadata()
+Gs = [g, run_meta]
+with g.as_default():
+    parser = parse_arguments_deepfnf()
+    opts = parser.parse_args()
+    logger = Viz.logger(opts,opts.__dict__)
+    _, weight_dir = logger.path_parse('train')
+    opts.weight_file = os.path.join(weight_dir,opts.weight_file)
 
-parser = parse_arguments_deepfnf()
-opts = parser.parse_args()
-logger = Viz.logger(opts,opts.__dict__)
-_, weight_dir = logger.path_parse('train')
-opts.weight_file = os.path.join(weight_dir,opts.weight_file)
+    print("weights_dir: ",weight_dir)
+    opts = logger.opts
+    TLIST = opts.TLIST
+    VPATH = opts.VPATH
+    BSZ = 1
+    IMSZ = 448
+    LR = 1e-4
+    DROP = (1.1e6, 1.25e6) # Learning rate drop
+    MAXITER = 1.5e6
+    displacement = opts.displacement
+    VALFREQ = opts.val_freq
+    SAVEFREQ = opts.save_freq
+    wts = weight_dir
 
-print("weights_dir: ",weight_dir)
-opts = logger.opts
-TLIST = opts.TLIST
-VPATH = opts.VPATH
-BSZ = 1
-IMSZ = 448
-LR = 1e-4
-DROP = (1.1e6, 1.25e6) # Learning rate drop
-MAXITER = 1.5e6
-displacement = opts.displacement
-VALFREQ = opts.val_freq
-SAVEFREQ = opts.save_freq
-wts = weight_dir
-
-if not os.path.exists(wts):
-    os.makedirs(wts)
-if(opts.model == 'deepfnf'):
-    model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
-elif(opts.model == 'unet'):
-    model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
-if(opts.mode == 'test'):
-    def load_net(fn, model):
-        wts = np.load(fn)
-        for k, v in wts.items():
-            model.weights[k] = tfe.Variable(v)
-    tf.enable_eager_execution()
-    print("Restoring model from " + opts.weight_file)
-    load_net(opts.weight_file, model)
-    test(model, opts.weight_file, opts.TESTPATH,logger)
-    exit(0)
+    if not os.path.exists(wts):
+        os.makedirs(wts)
+    if(opts.model == 'deepfnf'):
+        model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'unet'):
+        model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    if(opts.mode == 'test'):
+        def load_net(fn, model):
+            wts = np.load(fn)
+            for k, v in wts.items():
+                model.weights[k] = tfe.Variable(v)
+        # tf.enable_eager_execution()
+        print("Restoring model from " + opts.weight_file)
+        load_net(opts.weight_file, model)
+        test(model, opts.weight_file, opts.TESTPATH,logger,Gs)
+        exit(0)
 
 def get_lr(niter):
     if niter < DROP[0]:
@@ -85,7 +90,7 @@ with tf.device('/cpu:0'):
     tower_grads = []
     tower_loss, tower_lvals = [], []
     for i in range(opts.ngpus):
-        with tf.device('/cpu:%d' % i):
+        with tf.device('/gpu:%d' % i):
             example = dataset.batches[i]
 
             alpha = example['alpha'][:, None, None, None]
