@@ -8,6 +8,7 @@ import numpy as np
 import tensorflow as tf
 from test import test
 import net
+from net_no_scalemap import Net as NetNoScaleMap
 import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
@@ -43,7 +44,9 @@ with g.as_default():
 
     if not os.path.exists(wts):
         os.makedirs(wts)
-    if(opts.model == 'deepfnf'):
+    if(opts.model == 'deepfnf' and (not opts.scalemap)):
+        model = NetNoScaleMap(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'deepfnf'):
         model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'unet'):
         model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
