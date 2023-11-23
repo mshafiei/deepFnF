@@ -137,11 +137,11 @@ def screen_poisson(lambda_d, img,grad_x,grad_y,IMSZ):
     tf_fftfreq = lambda n : tf_fftfreq_even(n) if n%2==0 else tf_fftfreq_odd(n)
     sx = tf.complex(tf_fftfreq(IMSZ),0.)
     sx = tf.reshape(sx, [-1,1])
-    sx = tf.tile(sx, [1, IMSZ])
+    sx = tf.tile(sx, [1, int(IMSZ)])
     sx = tf.transpose(sx)
     sy = tf.complex(tf_fftfreq(IMSZ),0.)
     sy = tf.reshape(sy, [-1,1])
-    sy = tf.tile(sy, [1, IMSZ])
+    sy = tf.tile(sy, [1, int(IMSZ)])
 
     # Fourier transform of shift operators
     Dx_freq = 2 * math.pi * (tf.exp(-1j * sx) - 1)

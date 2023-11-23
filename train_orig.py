@@ -9,6 +9,7 @@ import tensorflow as tf
 from test import test
 import net
 from net_no_scalemap import Net as NetNoScaleMap
+from net_grad import Net as NetGrad
 import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
@@ -44,7 +45,9 @@ with g.as_default():
 
     if not os.path.exists(wts):
         os.makedirs(wts)
-    if(opts.model == 'deepfnf' and (not opts.scalemap)):
+    if(opts.model == 'deepfnf_grad'):
+        model = NetGrad(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'deepfnf' and (not opts.scalemap)):
         model = NetNoScaleMap(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf'):
         model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
@@ -185,6 +188,17 @@ print("===================== Model summary =====================")
 print(summary)
 print("===================== Model summary =====================")
 
+
+# mfn = wts + "/model.npz"
+# sfn = wts + "/state.npz"
+
+# ut.mprint("Saving model to " + mfn)
+# ut.saveNet(mfn, model.weights, sess)
+# ut.mprint("Saving state to " + sfn)
+# ut.saveAdam(sfn, opt, model.weights, sess)
+# ut.mprint("Done!")
+# msave.clean(every=SAVEFREQ, last=1)
+# ssave.clean(every=SAVEFREQ, last=1)
 
 while niter < MAXITER and not ut.stop:
 

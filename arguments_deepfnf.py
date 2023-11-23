@@ -28,7 +28,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--max_rotate', type=float,default=0.,help='Jitter')
     parser.add_argument('--channels_count_factor', type=float,default=1.,help='Scale the channel count for DeepFnF network')
     parser.add_argument('--num_basis', type=int,default=90,help='number of basis')
-    parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf','unet'],help='Neural network model')
+    parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf','unet', 'deepfnf_grad'],help='Neural network model')
     parser.add_argument('--scalemap', type=str_to_bool,default=True,nargs='?', const=True,help='Use scalemap?')
 
     parser = Viz.logger.parse_arguments(parser)
