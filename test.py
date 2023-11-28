@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-
+import tensorflow as tf
+tf.enable_eager_execution()
+tf.compat.v1.enable_eager_execution()
+# tf.compat.v1.disable_v2_behavior()
 import os
 import argparse
 
 import utils.np_utils as npu
 import numpy as np
-import tensorflow as tf
-# import tensorflow.contrib.eager as tfe
 
 import utils.utils as ut
 import utils.tf_utils as tfu
 import tqdm
 import time
-# tf.enable_eager_execution()
 
 def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
     
@@ -49,7 +49,7 @@ def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_d
     
     return {"gflops":gflops,"nparams":nparams}
 
-def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
+def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     
     data = np.load('%s/%d/%d.npz' % (datapath, k, c))
     alpha = data['alpha'][None, None, None, None]
@@ -75,11 +75,13 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,G
     start = time.time()
     denoise = model.forward(net_input)
 
-    
+    # with tf.compat.v1.Session() as sess:
+    #     result = sess.run(denoise)
+
     opts = tf.profiler.ProfileOptionBuilder.float_operation()   
-    g, run_meta = Gs
-    flops = tf.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
-    gflops = flops.total_float_ops/(1024*1024*1024)
+    # g, run_meta = Gs
+    # flops = tf.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
+    # gflops = flops.total_float_ops/(1024*1024*1024)
 
     end = time.time()
     print('forward pass takes ', end - start, 'ms')
@@ -116,7 +118,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,G
         lbl = {'denoise':r'$I$','ambient':r'$I_{ambient}$','noisy':r'$I_{noisy}$','flash':r'$I_{flash}$','flashx1':r'$I_{flash} \times 0.1$','flashx01':r'$I_{flash} \times 0.01$'}
         annotation = {'denoise':'%s<br>PSNR:%.3f<br>SSIM:%.3f'%('DeepFnF',metrics['psnr'],metrics['ssim'])}
         # logger.addIndividualImages(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='filesystem')
-        logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter')
+        logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
     logger.takeStep()
 
     mean_mtrcs = {key:'%.4f'%np.mean(np.array(v)) for key,v in metrics_list.items()}
@@ -125,7 +127,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,G
     errors['Level %d' % (4 - k)] = ', '.join(errstr)
     print(errors['Level %d' % (4 - k)])
 
-def test(model, model_path, datapath,logger,g):
+def test(model, model_path, datapath,logger):
     print('Done\n')
     k_val = None
     i_val = None
@@ -137,15 +139,15 @@ def test(model, model_path, datapath,logger,g):
     errors_dict = {}
     metrics_tmp = {}
     metrics_list_tmp = {}
-    stats = test_idx_model_stats(datapath,0,0,metrics_tmp,metrics_list_tmp,logger,model,errors_dict,errors,g)
-    logger.dumpDictJson(stats,'model_stats','train')
+    # stats = test_idx_model_stats(datapath,0,0,metrics_tmp,metrics_list_tmp,logger,model,errors_dict,errors,g)
+    # logger.dumpDictJson(stats,'model_stats','train')
 
     if(k_val == None or i_val == None):
         for k in range(4):
             metrics = {}
             metrics_list = {}
             for c in tqdm.trange(0,128,1):
-                test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,g)
+                test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors)
     else:
         metrics = {}
         metrics_list = {}

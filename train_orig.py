@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-
+import tensorflow as tf
+tf.enable_eager_execution()
+tf.compat.v1.enable_eager_execution()
+# tf.compat.v1.disable_v2_behavior()
 import os
 import argparse
 
 import utils.np_utils as npu
 import numpy as np
-import tensorflow as tf
-from test import test
+from test import test, test_idx_model_stats
 import net
 from net_no_scalemap import Net as NetNoScaleMap
 from net_grad import Net as NetGrad
@@ -17,34 +19,32 @@ from utils.dataset import Dataset
 from arguments_deepfnf import parse_arguments_deepfnf
 import cvgutils.Viz as Viz
 import tensorflow.contrib.eager as tfe
-# tf.compat.v1.disable_v2_behavior()
-tf.compat.v1.disable_eager_execution()
-g = tf.Graph()
-run_meta = tf.RunMetadata()
-Gs = [g, run_meta]
-with g.as_default():
-    parser = parse_arguments_deepfnf()
-    opts = parser.parse_args()
-    logger = Viz.logger(opts,opts.__dict__)
-    _, weight_dir = logger.path_parse('train')
-    opts.weight_file = os.path.join(weight_dir,opts.weight_file)
+# tf.compat.v1.disable_eager_execution()
 
-    print("weights_dir: ",weight_dir)
-    opts = logger.opts
-    TLIST = opts.TLIST
-    VPATH = opts.VPATH
-    BSZ = 1
-    IMSZ = 448
-    LR = 1e-4
-    DROP = (1.1e6, 1.25e6) # Learning rate drop
-    MAXITER = 1.5e6
-    displacement = opts.displacement
-    VALFREQ = opts.val_freq
-    SAVEFREQ = opts.save_freq
-    wts = weight_dir
+parser = parse_arguments_deepfnf()
+opts = parser.parse_args()
+logger = Viz.logger(opts,opts.__dict__)
+_, weight_dir = logger.path_parse('train')
+opts.weight_file = os.path.join(weight_dir,opts.weight_file)
 
-    if not os.path.exists(wts):
-        os.makedirs(wts)
+print("weights_dir: ",weight_dir)
+opts = logger.opts
+TLIST = opts.TLIST
+VPATH = opts.VPATH
+BSZ = 1
+IMSZ = 448
+LR = 1e-4
+DROP = (1.1e6, 1.25e6) # Learning rate drop
+MAXITER = 1.5e6
+displacement = opts.displacement
+VALFREQ = opts.val_freq
+SAVEFREQ = opts.save_freq
+wts = weight_dir
+
+if not os.path.exists(wts):
+    os.makedirs(wts)
+
+def CreateNetwork(opts):
     if(opts.model == 'deepfnf_grad'):
         model = NetGrad(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf' and (not opts.scalemap)):
@@ -53,16 +53,28 @@ with g.as_default():
         model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'unet'):
         model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
-    if(opts.mode == 'test'):
-        def load_net(fn, model):
-            wts = np.load(fn)
-            for k, v in wts.items():
-                model.weights[k] = tfe.Variable(v)
-        # tf.enable_eager_execution()
+    return model
+
+def load_net(fn, model):
+    wts = np.load(fn)
+    for k, v in wts.items():
+        model.weights[k] = tfe.Variable(v)
+    return model
+
+if(opts.mode == 'test'):
+    g = tf.Graph()
+    run_meta = tf.RunMetadata()
+    Gs = [g, run_meta]
+    with g.as_default():
+        model = CreateNetwork(opts)
         print("Restoring model from " + opts.weight_file)
-        load_net(opts.weight_file, model)
-        test(model, opts.weight_file, opts.TESTPATH,logger,Gs)
-        exit(0)
+        model = load_net(opts.weight_file, model)
+        stats = test_idx_model_stats(opts.TESTPATH,0,0,{},{},logger,model,{},{},Gs)
+        logger.dumpDictJson(stats,'model_stats','train')
+
+    model = CreateNetwork(opts)
+    test(model, opts.weight_file, opts.TESTPATH,logger)
+    exit(0)
 
 def get_lr(niter):
     if niter < DROP[0]:
