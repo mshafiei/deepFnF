@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import tensorflow as tf
-tf.enable_eager_execution()
-tf.compat.v1.enable_eager_execution()
+# tf.enable_eager_execution()
+# tf.compat.v1.enable_eager_execution()
 # tf.compat.v1.disable_v2_behavior()
 import os
 import argparse
@@ -19,7 +19,8 @@ from utils.dataset import Dataset
 from arguments_deepfnf import parse_arguments_deepfnf
 import cvgutils.Viz as Viz
 import tensorflow.contrib.eager as tfe
-# tf.compat.v1.disable_eager_execution()
+import lpips_tf
+tf.compat.v1.disable_eager_execution()
 
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
@@ -73,9 +74,11 @@ if(opts.mode == 'test'):
         logger.dumpDictJson(stats,'model_stats','train')
 
     model = CreateNetwork(opts)
+    model = load_net(opts.weight_file, model)
     test(model, opts.weight_file, opts.TESTPATH,logger)
     exit(0)
-
+else:
+    model = CreateNetwork(opts)
 def get_lr(niter):
     if niter < DROP[0]:
         return LR
@@ -146,10 +149,13 @@ with tf.device('/cpu:0'):
             l2_loss = tfu.l2_loss(denoise, ambient)
             gradient_loss = tfu.gradient_loss(denoise, ambient)
             psnr = tfu.get_psnr(denoise, ambient)
-
-            loss = l2_loss + gradient_loss
-            lvals = [loss, l2_loss, gradient_loss, psnr]
-            lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr']
+            if(opts.lpips):
+                lpips_loss = tf.reduce_mean(lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex'))
+            else:
+                lpips_loss = 0
+            loss = l2_loss + gradient_loss + lpips_loss
+            lvals = [loss, l2_loss, gradient_loss, psnr, lpips_loss]
+            lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr', "lpips_loss"]
 
             tower_loss.append(loss)
             tower_lvals.append(lvals)

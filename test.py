@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import tensorflow as tf
-tf.enable_eager_execution()
-tf.compat.v1.enable_eager_execution()
+# tf.enable_eager_execution()
+# tf.compat.v1.enable_eager_execution()
 # tf.compat.v1.disable_v2_behavior()
 import os
 import argparse

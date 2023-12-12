@@ -26,6 +26,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--min_scale', type=float,default=1.0,help='Jitter')
     parser.add_argument('--max_scale', type=float,default=1.0,help='Jitter')
     parser.add_argument('--max_rotate', type=float,default=0.,help='Jitter')
+    parser.add_argument('--lpips', type=int,default=0.,help='lpips loss')
     parser.add_argument('--channels_count_factor', type=float,default=1.,help='Scale the channel count for DeepFnF network')
     parser.add_argument('--num_basis', type=int,default=90,help='number of basis')
     parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf','unet', 'deepfnf_grad'],help='Neural network model')

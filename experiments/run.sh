@@ -10,7 +10,7 @@ imageio.plugins.freeimage.download()
 pip3 install pynvml IPython
 pip install --upgrade "jax[cpu]"
 
-export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/
+export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/:/mshvol2/users/mohammad/optimization/deepfnf_fork/lpips-tensorflow/
 pip3 install pynvml
 echo command:
 echo python3 $@
