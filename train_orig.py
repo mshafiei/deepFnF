@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+from arguments_deepfnf import parse_arguments_deepfnf
+parser = parse_arguments_deepfnf()
+opts = parser.parse_args()
 import tensorflow as tf
-# tf.enable_eager_execution()
-# tf.compat.v1.enable_eager_execution()
-# tf.compat.v1.disable_v2_behavior()
+if(opts.mode == "train"):
+    tf.compat.v1.disable_v2_behavior()
+    tf.compat.v1.disable_eager_execution()
+else:
+    tf.enable_eager_execution()
+    tf.compat.v1.enable_eager_execution()
 import os
 import argparse
 
@@ -10,20 +16,19 @@ import utils.np_utils as npu
 import numpy as np
 from test import test, test_idx_model_stats
 import net
+from net_fft import Net as netFFT
 from net_no_scalemap import Net as NetNoScaleMap
 from net_grad import Net as NetGrad
 import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset import Dataset
-from arguments_deepfnf import parse_arguments_deepfnf
+
 import cvgutils.Viz as Viz
 import tensorflow.contrib.eager as tfe
 import lpips_tf
-tf.compat.v1.disable_eager_execution()
 
-parser = parse_arguments_deepfnf()
-opts = parser.parse_args()
+
 logger = Viz.logger(opts,opts.__dict__)
 _, weight_dir = logger.path_parse('train')
 opts.weight_file = os.path.join(weight_dir,opts.weight_file)
@@ -46,7 +51,9 @@ if not os.path.exists(wts):
     os.makedirs(wts)
 
 def CreateNetwork(opts):
-    if(opts.model == 'deepfnf_grad'):
+    if(opts.model == 'deepfnf_fft'):
+        model = netFFT(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_grad'):
         model = NetGrad(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf' and (not opts.scalemap)):
         model = NetNoScaleMap(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
@@ -59,7 +66,7 @@ def CreateNetwork(opts):
 def load_net(fn, model):
     wts = np.load(fn)
     for k, v in wts.items():
-        model.weights[k] = tfe.Variable(v)
+        model.weights[k] = tf.Variable(v)
     return model
 
 if(opts.mode == 'test'):
@@ -141,6 +148,7 @@ with tf.device('/cpu:0'):
 
             denoise = tfu.camera_to_rgb(
                 denoise, example['color_matrix'], example['adapt_matrix'])
+            denoise
             ambient = tfu.camera_to_rgb(
                 example['ambient'],
                 example['color_matrix'], example['adapt_matrix'])

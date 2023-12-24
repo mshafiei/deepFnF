@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 import tensorflow as tf
-# tf.enable_eager_execution()
-# tf.compat.v1.enable_eager_execution()
-# tf.compat.v1.disable_v2_behavior()
 import os
 import argparse
 
@@ -101,6 +98,10 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
         noisy_flash/alpha * 0.01, data['color_matrix'], data['adapt_matrix'])
     ambient = np.clip(ambient, 0., 1.).squeeze()
     denoise = np.clip(denoise, 0., 1.).squeeze()
+    lmbda = 0.8
+    denoise[:,:,0] = npu.screen_poisson(lmbda,denoise[:,:,0],denoise[:,:,0]*0,denoise[:,:,0]*0)
+    denoise[:,:,1] = npu.screen_poisson(lmbda,denoise[:,:,1],denoise[:,:,1]*0,denoise[:,:,1]*0)
+    denoise[:,:,2] = npu.screen_poisson(lmbda,denoise[:,:,2],denoise[:,:,2]*0,denoise[:,:,2]*0)
     noisy_wb = np.clip(noisy_wb, 0., 1.).squeeze()
     flash_wb = np.clip(flash_wb, 0., 1.).squeeze()
     flash_wbx1 = np.clip(flash_wbx1, 0., 1.).squeeze()
@@ -108,7 +109,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     # if(erreval != None):
     #     piq_metrics_pred = erreval.eval(ambient,denoise,dtype='np',imformat='HWC')
     #     metrics.update({'msssim':piq_metrics_pred['msssim'],'lpipsVGG':piq_metrics_pred['lpipsVGG'],'lpipsAlex':piq_metrics_pred['lpipsAlex']})
-    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'ssim':npu.get_ssim(denoise, ambient)})
+    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient)})
     for key,v in metrics.items():
         if(not(key in metrics_list.keys())):
             metrics_list[key] = []
@@ -116,7 +117,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     if(c % 1 == 0):
         im = {'denoise':denoise, 'ambient':ambient, 'noisy':noisy_wb,'flash':flash_wb,'flashx1':flash_wbx1,'flashx01':flash_wbx01}
         lbl = {'denoise':r'$I$','ambient':r'$I_{ambient}$','noisy':r'$I_{noisy}$','flash':r'$I_{flash}$','flashx1':r'$I_{flash} \times 0.1$','flashx01':r'$I_{flash} \times 0.01$'}
-        annotation = {'denoise':'%s<br>PSNR:%.3f<br>SSIM:%.3f'%('DeepFnF',metrics['psnr'],metrics['ssim'])}
+        annotation = {'denoise':'%s<br>PSNR:%.3f'%('DeepFnF',metrics['psnr'])}
         # logger.addIndividualImages(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='filesystem')
         logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
     logger.takeStep()

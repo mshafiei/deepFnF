@@ -3,6 +3,7 @@ from skimage.metrics import structural_similarity
 import numpy as np
 import imageio
 import utils.tf_utils as tfu
+import math
 
 def imsave(nm, img):
     if len(img.shape) == 4:
@@ -43,6 +44,32 @@ def get_ssim(pred, gt):
         K2=0.03,
         sigma=1.5)
     return ssim
+
+def screen_poisson(lambda_d, img,grad_x,grad_y,axes=(-2,-1)):
+    
+    img_freq = np.fft.fft2(img,axes=axes)
+    grad_x_freq = np.fft.fft2(grad_x,axes=axes)
+    grad_y_freq = np.fft.fft2(grad_y,axes=axes)
+    
+    sx = np.fft.fftfreq(img.shape[axes[-1]])
+    sx = np.repeat(sx, img.shape[axes[-2]])
+    sx = np.reshape(sx, [img.shape[axes[-1]], img.shape[axes[-2]]])
+    sx = np.transpose(sx)
+    sy = np.fft.fftfreq(img.shape[axes[-2]])
+    sy = np.repeat(sy, img.shape[axes[-1]])
+    sy = np.reshape(sy, img.shape)
+
+    # Fourier transform of shift operators
+    Dx_freq = 2 * math.pi * (np.exp(-1j * sx) - 1)
+    Dy_freq = 2 * math.pi * (np.exp(-1j * sy) - 1)
+
+    # my_grad_x_freq = Dx_freq * img_freqs)
+    # my_grad_x_freq & my_grad_y_freq should be the same as grad_x_freq & grad_y_freq
+    lambda_d = np.minimum(1,np.maximum(0,lambda_d))
+    recon_freq = (lambda_d * img_freq + (1 - lambda_d) * np.conjugate(Dx_freq) * grad_x_freq + np.conjugate(Dy_freq) * grad_y_freq) / \
+                (lambda_d + (1 - lambda_d) * (np.conjugate(Dx_freq) * Dx_freq + np.conjugate(Dy_freq) * Dy_freq))
+    return np.real(np.fft.ifft2(recon_freq))
+
 def dx_np(x):
     #x is b,h,w,c
     return np.roll(x, 1, axis=[2]) - x

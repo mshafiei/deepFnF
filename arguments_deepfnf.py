@@ -26,10 +26,11 @@ def parse_arguments_deepfnf():
     parser.add_argument('--min_scale', type=float,default=1.0,help='Jitter')
     parser.add_argument('--max_scale', type=float,default=1.0,help='Jitter')
     parser.add_argument('--max_rotate', type=float,default=0.,help='Jitter')
-    parser.add_argument('--lpips', type=int,default=0.,help='lpips loss')
+    parser.add_argument('--lmbda', type=float,default=1,help='Maximum lambda for initialization')
+    parser.add_argument('--lpips', type=float,default=0.,help='lpips loss')
     parser.add_argument('--channels_count_factor', type=float,default=1.,help='Scale the channel count for DeepFnF network')
     parser.add_argument('--num_basis', type=int,default=90,help='number of basis')
-    parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf','unet', 'deepfnf_grad'],help='Neural network model')
+    parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf','deepfnf_fft','unet', 'deepfnf_grad'],help='Neural network model')
     parser.add_argument('--scalemap', type=str_to_bool,default=True,nargs='?', const=True,help='Use scalemap?')
 
     parser = Viz.logger.parse_arguments(parser)
@@ -58,6 +59,7 @@ def parse_arguments_deepfnf_fft():
     parser.add_argument('--lmbda_psi', type=float, default=1., help='The min value of lambda psi')
     parser.add_argument('--fixed_lambda', type=str_to_bool,default=False,nargs='?', const=True,help='Do not change the delta value')
     parser.add_argument('--max_lambda', type=float,default=0.001,help='Maximum lambda for initialization')
+    parser.add_argument('--lmbda', type=float,default=1,help='Maximum lambda for initialization')
     parser.add_argument('--save_freq', type=int,default=100000,help='How often save parameters')
     parser.add_argument('--mode', default='train', type=str,choices=['train','test'],help='Should we train or test the model?')
 

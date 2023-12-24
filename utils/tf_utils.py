@@ -150,9 +150,11 @@ def screen_poisson(lambda_d, img,grad_x,grad_y,IMSZ):
     Dy_freq = Dy_freq[None,None,...]
     # my_grad_x_freq = Dx_freq * img_freqs)
     # my_grad_x_freq & my_grad_y_freq should be the same as grad_x_freq & grad_y_freq
+    lambda_complex = tf.dtypes.complex(lambda_d,tf.zeros_like(lambda_d))
+    lambda_comp_complex = tf.dtypes.complex(1-lambda_d,tf.zeros_like(lambda_d))
 
-    recon_freq = (tf.dtypes.complex(lambda_d,tf.zeros_like(lambda_d)) * img_freq + tf.math.conj(Dx_freq) * grad_x_freq + tf.math.conj(Dy_freq) * grad_y_freq) / \
-                (tf.dtypes.complex(lambda_d,tf.zeros_like(lambda_d)) + (tf.math.conj(Dx_freq) * Dx_freq + tf.math.conj(Dy_freq) * Dy_freq))
+    recon_freq = (lambda_complex * img_freq + lambda_comp_complex * tf.math.conj(Dx_freq) * grad_x_freq + tf.math.conj(Dy_freq) * grad_y_freq) / \
+                (lambda_complex + lambda_comp_complex * (tf.math.conj(Dx_freq) * Dx_freq + tf.math.conj(Dy_freq) * Dy_freq))
     return tf.math.real(tf.signal.ifft2d(recon_freq))
 
 def get_psnr(pred, gt):
