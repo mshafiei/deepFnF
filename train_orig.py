@@ -27,6 +27,7 @@ from utils.dataset import Dataset
 import cvgutils.Viz as Viz
 import tensorflow.contrib.eager as tfe
 import lpips_tf
+import time
 
 
 logger = Viz.logger(opts,opts.__dict__)
@@ -78,7 +79,7 @@ if(opts.mode == 'test'):
         print("Restoring model from " + opts.weight_file)
         model = load_net(opts.weight_file, model)
         stats = test_idx_model_stats(opts.TESTPATH,0,0,{},{},logger,model,{},{},Gs)
-        logger.dumpDictJson(stats,'model_stats','train')
+        logger.dumpDictJson(stats,'model_stats','test')
 
     model = CreateNetwork(opts)
     model = load_net(opts.weight_file, model)
@@ -257,11 +258,13 @@ while niter < MAXITER and not ut.stop:
         if(type(outs[0].tolist()[-1]) == float):
             logger.addScalar(outs[0].tolist()[0],'psnr','val')
     else:
+        start = time.time()
         outs = sess.run(
             [loss, tStep],
             feed_dict={lr: get_lr(niter), global_step: niter}
         )
-        ut.vprint(niter, ['loss.t'], [outs[0]])
+        end = time.time()
+        ut.vprint(niter, ['loss.t', 'running time (ms)'], [outs[0], (end - start)*1000])
         if(type(outs[0]) == np.float32):
             logger.addScalar(outs[0],'loss')
     logger.takeStep()

@@ -30,6 +30,13 @@ def parse_arguments_deepfnf():
     parser.add_argument('--lpips', type=float,default=0.,help='lpips loss')
     parser.add_argument('--channels_count_factor', type=float,default=1.,help='Scale the channel count for DeepFnF network')
     parser.add_argument('--num_basis', type=int,default=90,help='number of basis')
+    parser.add_argument('--fft_lmbda_pp', type=float,default=0,help='number of basis')
+    parser.add_argument('--bilateral_pp', type=float,default=0,help='number of basis')
+    parser.add_argument('--bilateral_spatial', type=float,default=8,help='number of basis')
+    parser.add_argument('--bilateral_luma', type=float,default=16,help='number of basis')
+    parser.add_argument('--bilateral_smooth', type=float,default=8,help='number of basis')
+    parser.add_argument('--bilateral_neighbors', type=float,default=6,help='number of basis')
+    parser.add_argument('--bs_lam', type=float,default=10,help='number of basis')
     parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf','deepfnf_fft','unet', 'deepfnf_grad'],help='Neural network model')
     parser.add_argument('--scalemap', type=str_to_bool,default=True,nargs='?', const=True,help='Use scalemap?')
 

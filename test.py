@@ -10,6 +10,8 @@ import utils.utils as ut
 import utils.tf_utils as tfu
 import tqdm
 import time
+from bilateral import bilateralFilter, bilateralSolve
+from BilateralParallel import bilateral_rgb
 
 def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
     
@@ -72,14 +74,6 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     start = time.time()
     denoise = model.forward(net_input)
 
-    # with tf.compat.v1.Session() as sess:
-    #     result = sess.run(denoise)
-
-    opts = tf.profiler.ProfileOptionBuilder.float_operation()   
-    # g, run_meta = Gs
-    # flops = tf.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
-    # gflops = flops.total_float_ops/(1024*1024*1024)
-
     end = time.time()
     print('forward pass takes ', end - start, 'ms')
     denoise = denoise / alpha
@@ -96,12 +90,36 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
         noisy_flash/alpha * 0.1, data['color_matrix'], data['adapt_matrix'])
     flash_wbx01 = tfu.camera_to_rgb(
         noisy_flash/alpha * 0.01, data['color_matrix'], data['adapt_matrix'])
-    ambient = np.clip(ambient, 0., 1.).squeeze()
+    
+    # ambient = np.array(tf.squeeze(tf.clip_by_value(ambient, 0., 1.)))
+    denoise = tf.squeeze(denoise)
+    if(logger.opts.fft_lmbda_pp):
+        lmbda = logger.opts.fft_lmbda_pp
+        denoise1 = tfu.screen_poisson(lmbda, denoise[:,:,0],denoise[:,:,0]*0,denoise[:,:,0]*0, 448)
+        denoise2 = tfu.screen_poisson(lmbda, denoise[:,:,1],denoise[:,:,1]*0,denoise[:,:,1]*0, 448)
+        denoise3 = tfu.screen_poisson(lmbda, denoise[:,:,2],denoise[:,:,2]*0,denoise[:,:,2]*0, 448)
+        denoise = tf.squeeze(tf.stack([denoise1, denoise2, denoise3],axis=-1))
+    
+    ambient = np.array(ambient).squeeze()
+    denoise = np.array(denoise).squeeze()
+    flash_wb = np.array(flash_wb).squeeze()
+
+
+    if(logger.opts.bilateral_pp):
+        params = {}
+        params['BILATERAL_SIGMA_SPATIAL'] = logger.opts.bilateral_spatial
+        params['BILATERAL_SIGMA_LUMA'] = logger.opts.bilateral_luma
+        params['LOSS_SMOOTH_MULT'] = logger.opts.bilateral_smooth
+        params['A_VERT_DIAG_MIN'] = 1e-3
+        params['NUM_PCG_ITERS'] = 30
+        params['NUM_NEIGHBORS'] = logger.opts.bilateral_neighbors
+        params['bs_lam'] = logger.opts.bs_lam
+        # denoise = bilateral_rgb(flash_wb, denoise,flash_wb*0 + 1, params)
+        denoise = bilateralFilter(denoise,flash_wb,params)
+    
     denoise = np.clip(denoise, 0., 1.).squeeze()
-    lmbda = 0.8
-    denoise[:,:,0] = npu.screen_poisson(lmbda,denoise[:,:,0],denoise[:,:,0]*0,denoise[:,:,0]*0)
-    denoise[:,:,1] = npu.screen_poisson(lmbda,denoise[:,:,1],denoise[:,:,1]*0,denoise[:,:,1]*0)
-    denoise[:,:,2] = npu.screen_poisson(lmbda,denoise[:,:,2],denoise[:,:,2]*0,denoise[:,:,2]*0)
+    ambient = np.clip(ambient, 0., 1.).squeeze()
+
     noisy_wb = np.clip(noisy_wb, 0., 1.).squeeze()
     flash_wb = np.clip(flash_wb, 0., 1.).squeeze()
     flash_wbx1 = np.clip(flash_wbx1, 0., 1.).squeeze()
