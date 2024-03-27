@@ -1,8 +1,8 @@
 from collections import OrderedDict
 
 import numpy as np
-import tensorflow.compat.v1 as tf
-
+import tensorflow as tf
+import time
 import utils.tf_utils as tfu
 
 
@@ -15,6 +15,7 @@ class Net:
         self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
+        self.bilinear_kernel = tfu.bilinear_filter_precompute(ksz=7,nchannel=3)
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -62,7 +63,7 @@ class Net:
             out: output of the block right before downsampling
         '''
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
-        out = self.conv(pfx + '_2', out, nch, ksz=3, stride=1)
+        # out = self.conv(pfx + '_2', out, nch, ksz=3, stride=1)
         down = tf.nn.max_pool(out, [1, 2, 2, 1], [1, 2, 2, 1], 'SAME')
         self.activations[pfx] = down
         self.activations['skip_' + pfx] = out
@@ -83,14 +84,14 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
-        out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
+        out = tf.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
+        # out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
 
         out = self.conv(pfx + '_2', out, nch, ksz=3, stride=1)
-        out = self.conv(pfx + '_3', out, nch, ksz=3,
-                        stride=1, activation_name=pfx)
+        # out = self.conv(pfx + '_3', out, nch, ksz=3,
+                        # stride=1, activation_name=pfx)
         return out
 
     def kernel_up_block(self, out, nch, skip, pfx=''):
@@ -109,7 +110,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * shape[1:3])
+        out = tf.image.resize_bilinear(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
@@ -118,8 +119,8 @@ class Net:
         out = tf.concat([out, skip], axis=-1)
 
         out = self.conv(pfx + '_2', out, nch, ksz=3, stride=1)
-        out = self.conv(pfx + '_3', out, nch, ksz=3,
-                        stride=1, activation_name=pfx)
+        # out = self.conv(pfx + '_3', out, nch, ksz=3,
+                        # stride=1, activation_name=pfx)
         return out
 
 
@@ -146,7 +147,7 @@ class Net:
         out = self.up_block(out, self.channel_count(64 ), d1, pfx + 'up5')
 
         out = self.conv(pfx + 'end_1', out, self.channel_count(64))
-        out = self.conv(pfx + 'end_2', out, self.channel_count(64), activation_name=pfx + 'end')
+        # out = self.conv(pfx + 'end_2', out, self.channel_count(64), activation_name=pfx + 'end')
 
         return out
 
@@ -196,22 +197,29 @@ class Net:
         self.activations['decoding'] = self.kernels
 
     def forward(self, inp):
+        time1 = time.time_ns() / 1000000
         self.predict_coeff(inp)
+        time2 = time.time_ns() / 1000000
+        
         self.create_basis()
+        time3 = time.time_ns() / 1000000
         self.combine()
-
+        time4 = time.time_ns() / 1000000
         filtered_ambient = tfu.apply_filtering(
             inp[:, :, :, :3], self.kernels[..., 0])
-
+        time5 = time.time_ns() / 1000000
         # "Bilinearly upsample kernels + filtering"
         # is equivalent to
         # "filter the image with a bilinear kernel + dilated filter the image
         # with the original kernel".
         # This will save more memory.
-        smoothed_ambient = tfu.bilinear_filter(inp[:, :, :, :3], ksz=7)
+        smoothed_ambient = tfu.bilinear_filter(inp[:, :, :, :3], ksz=7, kernel=self.bilinear_kernel)
+        time6 = time.time_ns() / 1000000
         smoothed_ambient = tfu.apply_dilated_filtering(
             smoothed_ambient, self.kernels[..., 1], dilation=4)
+        time7 = time.time_ns() / 1000000
         filtered_ambient = filtered_ambient + smoothed_ambient
         denoised = filtered_ambient * self.scale
-
+        time8 = time.time_ns() / 1000000
+        print('predict_coeff ',time2-time1,' create_basis ',time3-time2, ' combine ',time4 - time3, ' apply_filtering ',time5-time4, ' bilinear_filter ', time6 - time5, ' apply_dilated_filtering ',time7-time6, '  denoised  ',time8 - time7)
         return denoised

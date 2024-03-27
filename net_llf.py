@@ -1,13 +1,15 @@
 from collections import OrderedDict
+from guided_local_laplacian import guided_local_laplacian
+from guided_local_laplacian_color import guided_local_laplacian_color
 
 import numpy as np
 import tensorflow.compat.v1 as tf
 
 import utils.tf_utils as tfu
-
+import time
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, alpha, beta, levels, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
@@ -15,7 +17,11 @@ class Net:
         self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
-
+        self.lmbda = lmbda
+        self.IMSZ = IMSZ
+        self.alpha = alpha
+        self.beta = beta
+        self.levels = levels
     def conv(
             self, name, inp, outch, ksz=3,
             stride=1, relu=True, pad='SAME', activation_name=None):
@@ -83,7 +89,7 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
+        out = tf.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
@@ -109,7 +115,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * shape[1:3])
+        out = tf.image.resize_bilinear(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
@@ -195,23 +201,50 @@ class Net:
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
 
-    def forward(self, inp):
+    def forward(self, inp, alpha):
+        time1 = time.time_ns() / 1000000
         self.predict_coeff(inp)
+        time2 = time.time_ns() / 1000000
         self.create_basis()
+        time3 = time.time_ns() / 1000000
         self.combine()
+        time4 = time.time_ns() / 1000000
 
         filtered_ambient = tfu.apply_filtering(
             inp[:, :, :, :3], self.kernels[..., 0])
-
+        time5 = time.time_ns() / 1000000
         # "Bilinearly upsample kernels + filtering"
         # is equivalent to
         # "filter the image with a bilinear kernel + dilated filter the image
         # with the original kernel".
         # This will save more memory.
         smoothed_ambient = tfu.bilinear_filter(inp[:, :, :, :3], ksz=7)
+        time6 = time.time_ns() / 1000000
         smoothed_ambient = tfu.apply_dilated_filtering(
             smoothed_ambient, self.kernels[..., 1], dilation=4)
+        time7 = time.time_ns() / 1000000
         filtered_ambient = filtered_ambient + smoothed_ambient
+        time8 = time.time_ns() / 1000000
         denoised = filtered_ambient * self.scale
+        flash = inp[:, :, :, 3:6] * alpha
+        
+        if(tf.is_symbolic_tensor(denoised)):
+            return denoised
+        flash_np = np.ascontiguousarray(np.array(flash[0,...]).transpose(2,0,1))
+        denoised_np = np.ascontiguousarray(np.array(denoised[0,...]).transpose(2,0,1))
+        c, h, w, = flash_np.shape
+        combined = np.empty([3, h, w], dtype=denoised_np.dtype)
+        intensity_max = max(flash_np.max(), denoised_np.max())
+        intensity_min = min(flash_np.min(), denoised_np.min())
+        denoised_np = (denoised_np - intensity_min) / (intensity_max - intensity_min)
+        flash_np = (flash_np - intensity_min) / (intensity_max - intensity_min)
+        # guided_local_laplacian(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
+        guided_local_laplacian_color(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
 
-        return denoised
+        combined = tf.convert_to_tensor(combined.transpose(1,2,0))[None,...]
+        time10 = time.time_ns() / 1000000
+        combined = combined * (intensity_max - intensity_min) + intensity_min
+
+        print('predict_coeff ',time2-time1,' create_basis ',time3-time2, ' combine ',time4 - time3, ' apply_filtering ',time5-time4, ' bilinear_filter ', time6 - time5, ' apply_dilated_filtering ',time7-time6, '  denoised  ',time10 - time8)
+        
+        return combined

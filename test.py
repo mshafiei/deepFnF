@@ -12,6 +12,7 @@ import tqdm
 import time
 from bilateral import bilateralFilter, bilateralSolve
 from BilateralParallel import bilateral_rgb
+import cvgutils.Linalg as Linalg
 
 def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
     
@@ -37,19 +38,24 @@ def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_d
     net_input = tf.concat([noisy, noise_std], axis=-1)
 
     start = time.time()
-    denoise = model.forward(net_input)
+    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf'):
+        denoise = model.forward(net_input, data['alpha'])
+    else:
+        denoise = model.forward(net_input)
 
     
-    opts = tf.profiler.ProfileOptionBuilder.float_operation()   
+    opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()   
     g, run_meta = Gs
-    flops = tf.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
+    flops = tf.compat.v1.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
     gflops = flops.total_float_ops/(1024*1024*1024)
-    nparams = int(np.sum([np.prod(model.weights[i].shape) for i in model.weights]))
-    
+    if(hasattr(model,'weights')):
+        nparams = int(np.sum([np.prod(model.weights[i].shape) for i in model.weights]))
+    else:
+        nparams = 0
     return {"gflops":gflops,"nparams":nparams}
 
-def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
-    
+def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval):
+    levelKey = 'Level %d' % (4 - k)
     data = np.load('%s/%d/%d.npz' % (datapath, k, c))
     alpha = data['alpha'][None, None, None, None]
     ambient = data['ambient']
@@ -70,12 +76,16 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     noise_std = tfu.estimate_std(
         noisy, data['sig_read'], data['sig_shot'])
     net_input = tf.concat([noisy, noise_std], axis=-1)
+    
+    start = time.time_ns()
+    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf'):
+        denoise = model.forward(net_input, data['alpha'])
+    else:
+        denoise = model.forward(net_input)
 
-    start = time.time()
-    denoise = model.forward(net_input)
+    end = time.time_ns()
+    print('forward pass takes ', (end - start)/1000000, 'ms')
 
-    end = time.time()
-    print('forward pass takes ', end - start, 'ms')
     denoise = denoise / alpha
 
     ambient = tfu.camera_to_rgb(
@@ -85,11 +95,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
     noisy_wb = tfu.camera_to_rgb(
         noisy_ambient/alpha, data['color_matrix'], data['adapt_matrix'])
     flash_wb = tfu.camera_to_rgb(
-        noisy_flash/alpha, data['color_matrix'], data['adapt_matrix'])
-    flash_wbx1 = tfu.camera_to_rgb(
-        noisy_flash/alpha * 0.1, data['color_matrix'], data['adapt_matrix'])
-    flash_wbx01 = tfu.camera_to_rgb(
-        noisy_flash/alpha * 0.01, data['color_matrix'], data['adapt_matrix'])
+        noisy_flash, data['color_matrix'], data['adapt_matrix'])
     
     # ambient = np.array(tf.squeeze(tf.clip_by_value(ambient, 0., 1.)))
     denoise = tf.squeeze(denoise)
@@ -122,29 +128,35 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors):
 
     noisy_wb = np.clip(noisy_wb, 0., 1.).squeeze()
     flash_wb = np.clip(flash_wb, 0., 1.).squeeze()
-    flash_wbx1 = np.clip(flash_wbx1, 0., 1.).squeeze()
-    flash_wbx01 = np.clip(flash_wbx01, 0., 1.).squeeze()
-    # if(erreval != None):
-    #     piq_metrics_pred = erreval.eval(ambient,denoise,dtype='np',imformat='HWC')
-    #     metrics.update({'msssim':piq_metrics_pred['msssim'],'lpipsVGG':piq_metrics_pred['lpipsVGG'],'lpipsAlex':piq_metrics_pred['lpipsAlex']})
-    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient)})
+
+    
+    if(errval != None):
+        piq_metrics_pred = errval.eval(ambient,denoise,dtype='np',imformat='HWC')
+        metrics.update({'psnr':piq_metrics_pred['psnr'], 'ssim':piq_metrics_pred['ssim'],'msssim':piq_metrics_pred['msssim'],'lpipsAlex':piq_metrics_pred['lpipsAlex'],'lpipsAlexWeighted':piq_metrics_pred['lpipsAlexWeighted']})
+
+    # metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient)})
     for key,v in metrics.items():
-        if(not(key in metrics_list.keys())):
-            metrics_list[key] = []
-    [metrics_list[key].append(v) for key,v in metrics.items()]
+        if(not(key in metrics_list[levelKey].keys())):
+            metrics_list[levelKey][key] = []
+    [metrics_list[levelKey][key].append(v) for key,v in metrics.items()]
+    kernel, inv_kernel = tfu.sigmoid(logger.opts.sigmoid_offset,logger.opts.sigmoid_intensity,[448,448])
+    kernel = np.repeat(np.array(tf.signal.fftshift(kernel))[:,:,None],3,axis=-1)
+    inv_kernel = np.repeat(np.array(tf.signal.fftshift(inv_kernel))[:,:,None],3,axis=-1)
+    blank = inv_kernel * 0 + 1
     if(c % 1 == 0):
-        im = {'denoise':denoise, 'ambient':ambient, 'noisy':noisy_wb,'flash':flash_wb,'flashx1':flash_wbx1,'flashx01':flash_wbx01}
-        lbl = {'denoise':r'$I$','ambient':r'$I_{ambient}$','noisy':r'$I_{noisy}$','flash':r'$I_{flash}$','flashx1':r'$I_{flash} \times 0.1$','flashx01':r'$I_{flash} \times 0.01$'}
-        annotation = {'denoise':'%s<br>PSNR:%.3f'%('DeepFnF',metrics['psnr'])}
-        # logger.addIndividualImages(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='filesystem')
-        logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
+        im = {'blank':blank,'denoise':denoise, 'ambient':ambient, 'noisy':noisy_wb,'flash':flash_wb,'kernel':kernel,'1-kernel':inv_kernel}
+        lbl = {'blank':r'$Measurements$','denoise':r'$I$','ambient':r'$I_{ambient}$','noisy':r'$I_{noisy}$','flash':r'$I_{flash}$','kernel':r'$k$','1-kernel':r'$1-k$'}
+        annotation = {'blank':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>1-LPIPS+PSNR:%.3f<br>WLPIPS:%.3f'%(metrics['psnr'],metrics['lpipsAlex'],metrics['ssim'],metrics['msssim'],1-metrics['lpipsAlex']+metrics['psnr'],metrics['lpipsAlexWeighted'])}
+        # logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
+        logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
     logger.takeStep()
 
-    mean_mtrcs = {key:'%.4f'%np.mean(np.array(v)) for key,v in metrics_list.items()}
+    
+    mean_mtrcs = {key:'%.4f'%np.mean(np.array(v)) for key,v in metrics_list[levelKey].items()}
     errstr = ['%s: %s' %(key,v) for key,v in mean_mtrcs.items()]
-    errors_dict['Level %d' % (4 - k)] = mean_mtrcs
-    errors['Level %d' % (4 - k)] = ', '.join(errstr)
-    print(errors['Level %d' % (4 - k)])
+    errors_dict[levelKey] = mean_mtrcs
+    errors[levelKey] = ', '.join(errstr)
+    print(errors[levelKey])
 
 def test(model, model_path, datapath,logger):
     print('Done\n')
@@ -156,19 +168,38 @@ def test(model, model_path, datapath,logger):
         i_val = idx % 128
     errors = {}
     errors_dict = {}
-    metrics_tmp = {}
-    metrics_list_tmp = {}
     # stats = test_idx_model_stats(datapath,0,0,metrics_tmp,metrics_list_tmp,logger,model,errors_dict,errors,g)
     # logger.dumpDictJson(stats,'model_stats','train')
+    errval = Linalg.ErrEval('cuda','ssim,msssim,mse,psnr,lpipsAlex,lpipsAlexWeighted')
+    metrics_list = logger.loadDictJson('test_errors_samples','test')
+    if(metrics_list is None):
+        metrics_list = {}
+    # startK = len(metrics_list) - 1 if len(metrics_list) > 0 else 0
 
     if(k_val == None or i_val == None):
-        for k in range(4):
+        for k in range(0, 4):
             metrics = {}
-            metrics_list = {}
-            for c in tqdm.trange(0,128,1):
-                test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors)
+            levelKey = 'Level %d' % (4 - k)
+            if(levelKey not in metrics_list.keys()):
+                metrics_list[levelKey] = {}
+            startc = 0
+            if(len(metrics_list[levelKey])):
+                startc = len(metrics_list[levelKey]['psnr']) - 1 if len(metrics_list[levelKey]['psnr']) > 0 else 0
+                for i in range(startc):
+                    logger.takeStep()
+                    continue
+            if(startc >= 127):
+                test_idx(datapath,k,0,metrics,metrics_list,logger,model,errors_dict,errors, errval)
+                logger.dumpDictJson(errors_dict,'test_errors','test')
+            for c in tqdm.trange(startc,128,1):
+                with tf.device('/gpu:0'):
+                    test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
+                    logger.dumpDictJson(metrics_list,'test_errors_samples','test')
+                    logger.dumpDictJson(errors_dict,'test_errors','test')
+                    
     else:
         metrics = {}
         metrics_list = {}
-        test_idx(datapath,k_val,i_val,metrics,metrics_list,logger,model,errors_dict,errors)
+        with tf.device('/gpu:0'):
+            test_idx(datapath,k_val,i_val,metrics,metrics_list,logger,model,errors_dict,errors, errval)
     logger.dumpDictJson(errors_dict,'test_errors','test')

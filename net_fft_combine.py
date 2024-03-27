@@ -1,13 +1,13 @@
 from collections import OrderedDict
 
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 
 import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, x0, k, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
@@ -15,6 +15,10 @@ class Net:
         self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
+        self.lmbda = lmbda
+        self.IMSZ = IMSZ
+        self.x0 = x0
+        self.k = k
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -83,7 +87,7 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
+        out = tf.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
@@ -109,7 +113,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * shape[1:3])
+        out = tf.image.resize_bilinear(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
@@ -195,7 +199,7 @@ class Net:
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
 
-    def forward(self, inp):
+    def forward(self, inp, alpha):
         self.predict_coeff(inp)
         self.create_basis()
         self.combine()
@@ -214,4 +218,9 @@ class Net:
         filtered_ambient = filtered_ambient + smoothed_ambient
         denoised = filtered_ambient * self.scale
 
-        return denoised
+        denoised = tf.transpose(denoised,perm=[0,3,1,2])
+        flash = tf.transpose(inp[:, :, :, 3:6] * alpha,perm=[0,3,1,2])
+        combined, _, _, _ = tfu.combineFNFInFT(flash,denoised,self.x0,self.k)
+        combined = tf.transpose(combined,perm=[0,2,3,1])
+
+        return combined

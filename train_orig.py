@@ -2,31 +2,38 @@
 from arguments_deepfnf import parse_arguments_deepfnf
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 if(opts.mode == "train"):
-    tf.compat.v1.disable_v2_behavior()
-    tf.compat.v1.disable_eager_execution()
+    tf.disable_v2_behavior()
+    tf.disable_eager_execution()
 else:
     tf.enable_eager_execution()
-    tf.compat.v1.enable_eager_execution()
+    physical_devices = tf.config.list_physical_devices('GPU')
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 import os
 import argparse
 
 import utils.np_utils as npu
 import numpy as np
 from test import test, test_idx_model_stats
+import net_ksz3
 import net
+from net_laplacian_combine import Net as netLaplacianCombine
+# from net_llf import Net as netLLF
+from net_fft_combine import Net as netFFTCombine
+from net_flash_image import Net as netFlash
 from net_fft import Net as netFFT
+from net_laplacian_combine_pixelwise import Net as netLaplacianCombinePixelWise
 from net_no_scalemap import Net as NetNoScaleMap
 from net_grad import Net as NetGrad
+from net_slim import Net as NetSlim
 import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset import Dataset
 
 import cvgutils.Viz as Viz
-import tensorflow.contrib.eager as tfe
-import lpips_tf
+# import tensorflow.contrib.eager as tfe
 import time
 
 
@@ -52,22 +59,40 @@ if not os.path.exists(wts):
     os.makedirs(wts)
 
 def CreateNetwork(opts):
-    if(opts.model == 'deepfnf_fft'):
-        model = netFFT(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    
+    if(opts.model == 'net_flash_image'):
+        model = netFlash()
+    # elif(opts.model == 'deepfnf_llf'):
+    #     model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_combine_laplacian'):
+        model = netLaplacianCombine(opts.sigmoid_offset, opts.sigmoid_intensity, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_combine_laplacian_pixelwise'):
+        model = netLaplacianCombinePixelWise(opts.n_pyramid_levels, num_basis=opts.num_basis, ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_combine_fft'):
+        model = netFFTCombine(opts.sigmoid_offset, opts.sigmoid_intensity, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_fft'):
+        model = netFFT(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_grad'):
-        model = NetGrad(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+        model = NetGrad(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf' and (not opts.scalemap)):
-        model = NetNoScaleMap(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+        model = NetNoScaleMap(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'deepfnf' and opts.ksz == 3):
+        model = net_ksz3.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf'):
-        model = net.Net(ksz=15, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+        model = net.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'deepfnf-slim'):
+        model = NetSlim(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'unet'):
-        model = unet.Net(ksz=15, burst_length=2,channels_count_factor=opts.channels_count_factor)
+        model = unet.Net(ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor)
     return model
 
 def load_net(fn, model):
-    wts = np.load(fn)
-    for k, v in wts.items():
-        model.weights[k] = tf.Variable(v)
+    if(hasattr(model,'weights')):
+        wts = np.load(fn)
+        for k, v in wts.items():
+            model.weights[k] = tf.Variable(v)
+    else:
+        print('Model does not have weights')
     return model
 
 if(opts.mode == 'test'):
@@ -145,7 +170,10 @@ with tf.device('/cpu:0'):
             noise_std = tfu.estimate_std(noisy, sig_read, sig_shot)
             net_input = tf.concat([noisy, noise_std], axis=-1)
 
-            denoise = model.forward(net_input) / alpha
+            if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_combine_laplacian_pixelwise"):
+                denoise = model.forward(net_input,alpha) / alpha
+            else:
+                denoise = model.forward(net_input) / alpha
 
             denoise = tfu.camera_to_rgb(
                 denoise, example['color_matrix'], example['adapt_matrix'])
@@ -192,6 +220,18 @@ sess.run(tf.global_variables_initializer())
 dataset.init_handles(sess)
 
 #########################################################################
+
+mfn = wts + "/model.npz"
+sfn = wts + "/state.npz"
+
+ut.mprint("Saving model to " + mfn)
+ut.saveNet(mfn, model.weights, sess)
+ut.mprint("Saving state to " + sfn)
+ut.saveAdam(sfn, opt, model.weights, sess)
+ut.mprint("Done!")
+msave.clean(every=SAVEFREQ, last=1)
+ssave.clean(every=SAVEFREQ, last=1)
+
 # Load saved weights if any
 if niter > 0:
     mfn = wts + "/iter_%06d.model.npz" % niter

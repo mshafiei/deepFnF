@@ -2,7 +2,8 @@ import glob
 import functools
 
 import numpy as np
-import tensorflow as tf
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from six.moves import cPickle as pkl
 from utils.tf_spatial_transformer import transformer
 

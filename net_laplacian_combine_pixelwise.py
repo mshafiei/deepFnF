@@ -4,10 +4,10 @@ import numpy as np
 import tensorflow.compat.v1 as tf
 
 import utils.tf_utils as tfu
-
+import time
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, n_pyramid_levels, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
@@ -15,6 +15,9 @@ class Net:
         self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
+        self.lmbda = lmbda
+        self.IMSZ = IMSZ
+        self.n_pyramid_levels = n_pyramid_levels
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -83,7 +86,7 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
+        out = tf.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
@@ -109,7 +112,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * shape[1:3])
+        out = tf.image.resize_bilinear(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
@@ -139,12 +142,17 @@ class Net:
 
     def decode(self, out, skips, pfx=''):
         d1, d2, d3, d4, d5 = skips
-        out = self.up_block(out, self.channel_count(512), d5, pfx + 'up1')
-        out = self.up_block(out, self.channel_count(256), d4, pfx + 'up2')
-        out = self.up_block(out, self.channel_count(128), d3, pfx + 'up3')
-        out = self.up_block(out, self.channel_count(64 ), d2, pfx + 'up4')
-        out = self.up_block(out, self.channel_count(64 ), d1, pfx + 'up5')
-
+        
+        out = self.up_block(out, self.channel_count(512)+1, d5, pfx + 'up1')
+        self.pyramid_x0_0 = out[...,-1:]
+        out = self.up_block(out, self.channel_count(256)+1, d4, pfx + 'up2')
+        self.pyramid_x0_1 = out[...,-1:]
+        out = self.up_block(out, self.channel_count(128)+1, d3, pfx + 'up3')
+        self.pyramid_x0_2 = out[...,-1:]
+        out = self.up_block(out, self.channel_count(64 )+1, d2, pfx + 'up4')
+        self.pyramid_x0_3 = out[...,-1:]
+        out = self.up_block(out, self.channel_count(64 )+1, d1, pfx + 'up5')
+        self.pyramid_x0_4 = out[...,-1:]
         out = self.conv(pfx + 'end_1', out, self.channel_count(64))
         out = self.conv(pfx + 'end_2', out, self.channel_count(64), activation_name=pfx + 'end')
 
@@ -195,23 +203,39 @@ class Net:
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
 
-    def forward(self, inp):
+    def forward(self, inp, alpha):
+        # time1 = time.time_ns() / 1000000
         self.predict_coeff(inp)
+        # time2 = time.time_ns() / 1000000
         self.create_basis()
+        # time3 = time.time_ns() / 1000000
         self.combine()
+        # time4 = time.time_ns() / 1000000
 
         filtered_ambient = tfu.apply_filtering(
             inp[:, :, :, :3], self.kernels[..., 0])
-
+        # time5 = time.time_ns() / 1000000
         # "Bilinearly upsample kernels + filtering"
         # is equivalent to
         # "filter the image with a bilinear kernel + dilated filter the image
         # with the original kernel".
         # This will save more memory.
         smoothed_ambient = tfu.bilinear_filter(inp[:, :, :, :3], ksz=7)
+        # time6 = time.time_ns() / 1000000
         smoothed_ambient = tfu.apply_dilated_filtering(
             smoothed_ambient, self.kernels[..., 1], dilation=4)
+        # time7 = time.time_ns() / 1000000
         filtered_ambient = filtered_ambient + smoothed_ambient
+        # time8 = time.time_ns() / 1000000
         denoised = filtered_ambient * self.scale
+        flash = inp[:, :, :, 3:6] * alpha
+        combined = tfu.combineFNFInLaplacianPixelWise(flash,denoised,[self.pyramid_x0_4,self.pyramid_x0_3,self.pyramid_x0_2,self.pyramid_x0_1,self.pyramid_x0_0])
+        # if(self.x0 == 0 and self.k == 0):
+        #     combined = tfu.combineFNFInLaplacian(flash,flash,self.x0,self.k,self.n_pyramid_levels)    
+        # else:
+        #     combined = tfu.combineFNFInLaplacian(flash,denoised,self.x0[...,None],self.k[...,None],self.n_pyramid_levels)
+        # time10 = time.time_ns() / 1000000
 
-        return denoised
+        # print('predict_coeff ',time2-time1,' create_basis ',time3-time2, ' combine ',time4 - time3, ' apply_filtering ',time5-time4, ' bilinear_filter ', time6 - time5, ' apply_dilated_filtering ',time7-time6, '  denoised  ',time10 - time8)
+        
+        return combined
