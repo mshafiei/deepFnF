@@ -256,7 +256,7 @@ def bilinear_filter_precompute(ksz,nchannel=3):
     return kernel
 
 def bilinear_filter(image, ksz, kernel=None):
-    time1 = time.time_ns() /1000000
+    # time1 = time.time_ns() /1000000
     if(kernel is None):
         if ksz == 3:
             kernel = np.array([0.5, 1., 0.5], dtype=np.float32).reshape([3, 1])
@@ -266,10 +266,10 @@ def bilinear_filter(image, ksz, kernel=None):
         kernel = np.matmul(kernel, kernel.T)
         kernel = kernel / np.sum(kernel)
         kernel = tf.tile(kernel[..., None, None], [1, 1, tf.shape(image)[-1], 1])
-    time2 = time.time_ns() /1000000
+    # time2 = time.time_ns() /1000000
     image = tf.nn.depthwise_conv2d(image, kernel, [1, 1, 1, 1], padding='SAME')
-    time3 = time.time_ns() /1000000
-    print('bilinear constant ', time2 - time1, ' depthwise ', time3 - time2)
+    # time3 = time.time_ns() /1000000
+    # print('bilinear constant ', time2 - time1, ' depthwise ', time3 - time2)
     return image
 
 

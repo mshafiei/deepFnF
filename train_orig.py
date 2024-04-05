@@ -31,7 +31,7 @@ import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset import Dataset
-
+import lpips_tf
 import cvgutils.Viz as Viz
 # import tensorflow.contrib.eager as tfe
 import time
@@ -190,9 +190,14 @@ with tf.device('/cpu:0'):
                 lpips_loss = tf.reduce_mean(lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex'))
             else:
                 lpips_loss = 0
-            loss = l2_loss + gradient_loss + lpips_loss
-            lvals = [loss, l2_loss, gradient_loss, psnr, lpips_loss]
-            lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr', "lpips_loss"]
+            if(opts.wlpips):
+                # wo_reduction = lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex') * tf.square(denoise - ambient)
+                wlpips_loss = tf.reduce_mean(lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex') * tf.square(denoise - ambient))
+            else:
+                wlpips_loss = 0
+            loss = l2_loss + gradient_loss + lpips_loss + wlpips_loss
+            lvals = [loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss]
+            lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr', "lpips_loss","wlpips_loss"]
 
             tower_loss.append(loss)
             tower_lvals.append(lvals)
