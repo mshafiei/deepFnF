@@ -4,6 +4,7 @@ import functools
 import numpy as np
 # import tensorflow as tf
 import tensorflow.compat.v1 as tf
+import tensorflow as tf2
 from six.moves import cPickle as pkl
 from utils.tf_spatial_transformer import transformer
 
@@ -33,7 +34,7 @@ def load_image(filename, color_matrix, adapt_matrix):
 
 
 def gen_homography(
-        example, jitter, min_scale, max_scale, theta, psz, is_val=False):
+        example, jitter, min_scale, max_scale, theta, psz, is_val=True):
     '''Randomly warp the image'''
     ambient = tf.clip_by_value(example['ambient'], 0., 1.)
     flash_only = tf.clip_by_value(example['flash_only'], 0., 1.)
@@ -153,33 +154,33 @@ class Dataset:
 
         self._handle = tf.Variable(
             tf.zeros(shape=[], dtype=tf.string), trainable=False)
-        self._handle_ph = tf.placeholder(tf.string, shape=[])
-        self._handle_assign_op = tf.assign(self._handle, self._handle_ph).op
-
-        self.iterator = tf.data.Iterator.from_string_handle(
-            self._handle, self.train.output_types, self.train.output_shapes)
+        # self._handle_ph = tf.placeholder(tf.string, shape=[])
+        # self._handle_assign_op = tf.assign(self._handle, self._handle_ph).op
+        self.iterator = self.train.iterator
+        # self.iterator = tf.data.Iterator.from_string_handle(
+        #     self._handle, self.train.output_types, self.train.output_shapes)
 
         # One batch for each gpu
-        self.batches = []
-        for i in range(ngpus):
-            example = self.iterator.get_next()
-            for name, data in example.items():
-                if name in ['ambient', 'warped_ambient', 'flash_only', 'warped_flash_only']:
-                    data.set_shape([bsz, psz, psz, 3])
-            self.batches.append(example)
+        # self.batches = []
+        # for i in range(ngpus):
+        #     example = self.iterator.get_next()
+        #     for name, data in example.items():
+        #         if name in ['ambient', 'warped_ambient', 'flash_only', 'warped_flash_only']:
+        #             data.set_shape([bsz, psz, psz, 3])
+        #     self.batches.append(example)
 
     def init_handles(self, sess):
         self.train_handle = self.train.get_handle(sess)
         self.val_handle = self.val.get_handle(sess)
 
-    def swap_train(self, sess):
-        sess.run(self._handle_assign_op, feed_dict={
-                 self._handle_ph: self.train_handle})
+    # def swap_train(self, sess):
+    #     sess.run(self._handle_assign_op, feed_dict={
+    #              self._handle_ph: self.train_handle})
 
-    def swap_val(self, sess):
-        self.val.initialize(sess)
-        sess.run(self._handle_assign_op, feed_dict={
-                 self._handle_ph: self.val_handle})
+    # def swap_val(self, sess):
+    #     self.val.initialize(sess)
+    #     sess.run(self._handle_assign_op, feed_dict={
+    #              self._handle_ph: self.val_handle})
 
 
 class TrainSet:
@@ -213,7 +214,7 @@ class TrainSet:
                         .batch(bsz)
                         .prefetch(ngpus)
                         )
-        self.iterator = self.dataset.make_one_shot_iterator()
+        self.iterator = iter(self.dataset)
 
         self.output_types = self.dataset.output_types
         self.output_shapes = self.dataset.output_shapes
@@ -233,7 +234,7 @@ class ValSet:
                         .batch(bsz, drop_remainder=True)
                         .prefetch(ngpus)
                         )
-        self.iterator = self.dataset.make_initializable_iterator()
+        self.iterator = iter(self.dataset)
 
     def initialize(self, sess):
         sess.run(self.iterator.initializer)
@@ -271,7 +272,7 @@ class _OnFlyValSet:
                         .batch(bsz, drop_remainder=True)
                         .prefetch(ngpus)
                         )
-        self.iterator = self.dataset.make_initializable_iterator()
+        self.iterator = iter(self.dataset)
 
     def initialize(self, sess):
         sess.run(self.iterator.initializer)

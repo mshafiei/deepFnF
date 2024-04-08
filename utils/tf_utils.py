@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
+import tensorflow as tf2
 import time
 import math
 import matplotlib.pyplot as plt
@@ -116,7 +117,7 @@ def get_gradient(imgs):
         .5 * (imgs[:, 1:, :-1, :] - imgs[:, :-1, :-1, :]),
         .5 * (imgs[:, :-1, 1:, :] - imgs[:, :-1, :-1, :])], axis=-1)
 
-
+@tf.function
 def gradient_loss(pred, gt):
     return l1_loss(get_gradient(pred), get_gradient(gt))
 
@@ -130,7 +131,7 @@ def dy_tf(x):
 def l1_loss(pred, gt):
     return tf.reduce_mean(tf.abs(pred - gt))
 
-
+@tf.function
 def l2_loss(pred, gt):
     return tf.reduce_mean(tf.square(pred - gt))
 

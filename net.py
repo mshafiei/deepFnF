@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 
 import utils.tf_utils as tfu
 
@@ -28,7 +28,7 @@ class Net:
             w = self.weights[wnm]
         else:
             sq = np.sqrt(3.0 / np.float32(ksz[0] * ksz[1] * ksz[2]))
-            w = tf.Variable(tf.random_uniform(
+            w = tf.Variable(tf.random.uniform(
                 ksz, minval=-sq, maxval=sq, dtype=tf.float32))
             self.weights[wnm] = w
 
@@ -83,7 +83,7 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
+        out = tf.image.resize(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
@@ -109,7 +109,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.compat.v1.image.resize_bilinear(out, 2 * shape[1:3])
+        out = tf.image.resize(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
