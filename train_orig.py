@@ -280,7 +280,7 @@ with tf2.device('/gpu:0'):
             if VALFREQ > 0 and niter % VALFREQ == 0:
                 # draw example['ambient'], denoised image, flash image, absolute error
                 denoisednp, ambientnp, flashnp, noisy = val_step(example)
-                logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train',ltype='filesystem')
+                logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
             logger.takeStep()
             # log losses
             # visualize training

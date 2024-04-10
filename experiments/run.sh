@@ -12,9 +12,9 @@ export LANG=C.UTF-8
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
 # conda activate deepfnf
 # pip3 install scikit-image
-#python3 -c """import imageio
-#imageio.plugins.freeimage.download()
-#"""
+python3 -c """import imageio
+imageio.plugins.freeimage.download()
+"""
 #pip3 install pynvml IPython
 #pip install --upgrade "jax[cpu]"
 #pip3 install -U jax[cuda12_cudnn89] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
