@@ -255,17 +255,16 @@ with tf2.device('/gpu:0'):
             gradient_loss = tfu.gradient_loss(denoise, ambient)
             loss = l2_loss + gradient_loss
 
-        # gradients = tape.gradient(loss, list(model.weights.values()))
-        # opt.apply_gradients(zip(gradients,model.weights))
+        gradients = tape.gradient(loss, list(model.weights.values()))
+        opt.apply_gradients(zip(gradients,list(model.weights.values())))
         # opt.minimize(zip([gradients],[model.weights]))
-        opt.minimize(loss, list(model.weights.values()), tape=tape)
+        # opt.minimize(loss, list(model.weights.values()), tape=tape)
         return loss
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
     while niter < MAXITER:
-        for i,example in enumerate(dataset.iterator):
+        for i,example in enumerate(dataset.iterator):        
             niter += 1
-
             loss = train_step(example)
             logger.addScalar(loss.numpy(),'loss')
             print('iter ',niter, ' loss ', loss.numpy())
@@ -276,7 +275,6 @@ with tf2.device('/gpu:0'):
                 fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
                 print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
                 print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
-            
             if VALFREQ > 0 and niter % VALFREQ == 0:
                 # draw example['ambient'], denoised image, flash image, absolute error
                 denoisednp, ambientnp, flashnp, noisy = val_step(example)
