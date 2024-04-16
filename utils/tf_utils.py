@@ -1,6 +1,5 @@
 import numpy as np
-import tensorflow.compat.v1 as tf
-import tensorflow as tf2
+import tensorflow as tf
 import time
 import math
 import matplotlib.pyplot as plt
@@ -216,7 +215,7 @@ def apply_filtering(imgs, kernels):
     padding = (ksz - 1) // 2
     imgs = tf.pad(imgs, [[0, 0], [padding, padding], [
                   padding, padding], [0, 0]], 'REFLECT')
-    patches = tf.extract_image_patches(
+    patches = tf.image.extract_patches(
         imgs, [1, ksz, ksz, 1], [1, 1, 1, 1], [1, 1, 1, 1], 'VALID')
     patches = tf.reshape(patches, [b, h, w, ksz * ksz, burst_length * 3])
     kernels = tf.reshape(kernels, [b, h, w, ksz * ksz, burst_length * 3])
@@ -235,7 +234,7 @@ def apply_dilated_filtering(imgs, kernels, dilation=1):
     imgs = tf.pad(
         imgs, [[0, 0], [padding, padding],
         [padding, padding], [0, 0]], 'REFLECT')
-    patches = tf.extract_image_patches(
+    patches = tf.image.extract_patches(
         imgs, [1, ksz, ksz, 1], [1, 1, 1, 1],
         [1, dilation, dilation, 1], 'VALID')
     patches = tf.reshape(patches, [b, h, w, ksz * ksz, burst_length * 3])

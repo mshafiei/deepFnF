@@ -3,8 +3,8 @@ import functools
 
 import numpy as np
 # import tensorflow as tf
-import tensorflow.compat.v1 as tf
-import tensorflow as tf2
+# import tensorflow.compat.v1 as tf
+import tensorflow as tf
 from six.moves import cPickle as pkl
 from utils.tf_spatial_transformer import transformer
 
@@ -216,8 +216,8 @@ class TrainSet:
                         )
         self.iterator = iter(self.dataset)
 
-        self.output_types = self.dataset.output_types
-        self.output_shapes = self.dataset.output_shapes
+        # self.output_types = self.dataset.output_types
+        # self.output_shapes = self.dataset.output_shapes
 
     def get_handle(self, sess):
         return sess.run(self.iterator.string_handle())

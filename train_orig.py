@@ -2,17 +2,16 @@
 from arguments_deepfnf import parse_arguments_deepfnf
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
-import tensorflow.compat.v1 as tf
-import tensorflow as tf2
-if(opts.mode == "train"):
-    tf.disable_v2_behavior()
-    tf.enable_eager_execution()
-    physical_devices = tf.config.list_physical_devices('GPU')
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
-else:
-    tf.enable_eager_execution()
-    physical_devices = tf.config.list_physical_devices('GPU')
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
+import tensorflow as tf
+# if(opts.mode == "train"):
+#     # tf.disable_v2_behavior()
+#     # tf.enable_eager_execution()
+#     physical_devices = tf.config.list_physical_devices('GPU')
+#     tf.config.experimental.set_memory_growth(physical_devices[0], True)
+# else:
+#     tf.enable_eager_execution()
+#     physical_devices = tf.config.list_physical_devices('GPU')
+#     tf.config.experimental.set_memory_growth(physical_devices[0], True)
 import os
 import argparse
 
@@ -36,9 +35,8 @@ import utils.tf_utils as tfu
 from utils.dataset import Dataset
 import lpips_tf
 import cvgutils.Viz as Viz
-# import tensorflow.contrib.eager as tfe
 import time
-# tf2.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 
 logger = Viz.logger(opts,opts.__dict__)
@@ -94,7 +92,7 @@ def load_net(fn, model):
     if(hasattr(model,'weights')):
         wts = np.load(fn)
         for k, v in wts.items():
-            model.weights[k] = tf2.Variable(v)
+            model.weights[k] = tf.Variable(v)
     else:
         print('Model does not have weights')
     return model
@@ -127,15 +125,15 @@ def get_lr(niter):
 #########################################################################
 
 
-with tf2.device('/gpu:0'):
+with tf.device('/gpu:0'):
     # global_step = tf.placeholder(dtype=tf.int64, shape=[])
-    global_step = tf2.keras.Input(name="global_step", shape=(), dtype=tf2.dtypes.int64)
+    global_step = tf.keras.Input(name="global_step", shape=(), dtype=tf.dtypes.int64)
     niter = 0
     # Set up optimizer
     # lr = tf.placeholder(shape=[], dtype=tf.float32)
-    lr = tf2.keras.Input(name="lr", shape=(), dtype=tf2.dtypes.float32)
+    lr = tf.keras.Input(name="lr", shape=(), dtype=tf.dtypes.float32)
     # opt = tf.train.AdamOptimizer(lr)
-    opt = tf2.optimizers.Adam(LR)
+    opt = tf.optimizers.Adam(LR)
     # Data loading setup
     dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ,
                       ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
@@ -145,8 +143,8 @@ with tf2.device('/gpu:0'):
 #     def train_step(example):
 #         alpha = 1
 #         scale=5
-#         noisy = tf2.concat([example['ambient']*scale, example['flash_only']*scale], axis=-1)
-#         net_input = tf2.concat([noisy, noisy], axis=-1)
+#         noisy = tf.concat([example['ambient']*scale, example['flash_only']*scale], axis=-1)
+#         net_input = tf.concat([noisy, noisy], axis=-1)
 
 #         with tf.GradientTape() as tape:
 #             denoise = model.forward(net_input,alpha)    
@@ -189,9 +187,9 @@ with tf2.device('/gpu:0'):
         noisy_flash, _, _ = tfu.add_read_shot_noise(
             warped_flash, sig_read=sig_read, sig_shot=sig_shot)
 
-        noisy = tf2.concat([noisy_ambient, noisy_flash], axis=-1)
+        noisy = tf.concat([noisy_ambient, noisy_flash], axis=-1)
         noise_std = tfu.estimate_std(noisy, sig_read, sig_shot)
-        net_input = tf2.concat([noisy, noise_std], axis=-1)
+        net_input = tf.concat([noisy, noise_std], axis=-1)
         return net_input, alpha, noisy_flash, noisy_ambient
 
     @tf.function
