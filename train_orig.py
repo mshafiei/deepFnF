@@ -36,7 +36,7 @@ from utils.dataset import Dataset
 import lpips_tf
 import cvgutils.Viz as Viz
 import time
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 
 logger = Viz.logger(opts,opts.__dict__)
@@ -260,8 +260,9 @@ with tf.device('/gpu:0'):
         return loss
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
-    while niter < MAXITER:
-        for i,example in enumerate(dataset.iterator):        
+    dataset.iterator = dataset.iterator.repeat(10000)
+    for example in dataset.iterator:
+        if niter < MAXITER:
             niter += 1
             loss = train_step(example)
             logger.addScalar(loss.numpy(),'loss')
@@ -296,6 +297,6 @@ with tf.device('/gpu:0'):
             # grads = opt.compute_gradients(
             #     loss_function, var_list=list())
             # tower_grads.append(grads)
-                    
+                
 fn1, fn2 = logger.save_params(model.weights, opt.get_config(),niter)
 print("Saving model to " + fn1 + " and " + fn2)

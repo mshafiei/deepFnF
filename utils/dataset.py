@@ -214,7 +214,7 @@ class TrainSet:
                         .batch(bsz)
                         .prefetch(ngpus)
                         )
-        self.iterator = iter(self.dataset)
+        self.iterator = self.dataset
 
         # self.output_types = self.dataset.output_types
         # self.output_shapes = self.dataset.output_shapes
@@ -234,7 +234,7 @@ class ValSet:
                         .batch(bsz, drop_remainder=True)
                         .prefetch(ngpus)
                         )
-        self.iterator = iter(self.dataset)
+        self.iterator = self.dataset
 
     def initialize(self, sess):
         sess.run(self.iterator.initializer)
@@ -272,7 +272,7 @@ class _OnFlyValSet:
                         .batch(bsz, drop_remainder=True)
                         .prefetch(ngpus)
                         )
-        self.iterator = iter(self.dataset)
+        self.iterator = self.dataset
 
     def initialize(self, sess):
         sess.run(self.iterator.initializer)
