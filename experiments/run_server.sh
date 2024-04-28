@@ -1,8 +1,8 @@
 #!/bin/bash
 ngpus=1
 ncpus=1
-meml=30G
-memr=26G
+meml=105G
+memr=95G
 
 server_path=/mshvol2/users/mohammad/optimization/deepfnf_fork
 cmd1="python deploy --image docker.io/mohammadsh/deepfnf:latest --priority $3 --key kub --name $2 --ngpus $ngpus --cpu $ncpus --meml $meml --memr $memr --type deeplearning"

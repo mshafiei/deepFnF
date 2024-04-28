@@ -32,11 +32,11 @@ from net_slim import Net as NetSlim
 import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
-from utils.dataset import Dataset
+from utils.dataset_prefetch import TrainSet
 import lpips_tf
 import cvgutils.Viz as Viz
 import time
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 
 logger = Viz.logger(opts,opts.__dict__)
@@ -135,7 +135,7 @@ with tf.device('/gpu:0'):
     # opt = tf.train.AdamOptimizer(lr)
     opt = tf.optimizers.Adam(LR)
     # Data loading setup
-    dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ,
+    dataset = TrainSet(TLIST, bsz=BSZ, psz=IMSZ,
                       ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
 
 # # Calculate grads for each tower
@@ -168,7 +168,7 @@ with tf.device('/gpu:0'):
 
     @tf.function
     def prepare_input(example):
-        alpha = example['alpha'][:, None, None, None]
+        alpha = example['alpha']
         dimmed_ambient, _ = tfu.dim_image(
             example['ambient'], alpha=alpha)
         dimmed_warped_ambient, _ = tfu.dim_image(
@@ -180,8 +180,8 @@ with tf.device('/gpu:0'):
         warped_flash = example['warped_flash_only'] * \
             ut.FLASH_STRENGTH + dimmed_warped_ambient
 
-        sig_read = example['sig_read'][:, None, None, None]
-        sig_shot = example['sig_shot'][:, None, None, None]
+        sig_read = example['sig_read']
+        sig_shot = example['sig_shot']
         noisy_ambient, _, _ = tfu.add_read_shot_noise(
             dimmed_ambient, sig_read=sig_read, sig_shot=sig_shot)
         noisy_flash, _, _ = tfu.add_read_shot_noise(
@@ -261,9 +261,8 @@ with tf.device('/gpu:0'):
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
     # dataset.iterator = dataset.iterator.repeat(10000)
-    for example in dataset.iterator:
-        if niter > MAXITER:
-            break
+    for i in range(int(MAXITER)):
+        example = dataset.get_next()
         niter += 1
         loss = train_step(example)
         logger.addScalar(loss.numpy(),'loss')
