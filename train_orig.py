@@ -36,7 +36,7 @@ from utils.dataset import Dataset
 import lpips_tf
 import cvgutils.Viz as Viz
 import time
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 
 logger = Viz.logger(opts,opts.__dict__)
@@ -260,43 +260,43 @@ with tf.device('/gpu:0'):
         return loss
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
-    dataset.iterator = dataset.iterator.repeat(10000)
+    # dataset.iterator = dataset.iterator.repeat(10000)
     for example in dataset.iterator:
-        if niter < MAXITER:
-            niter += 1
-            loss = train_step(example)
-            logger.addScalar(loss.numpy(),'loss')
-            print('iter ',niter, ' loss ', loss.numpy())
-            # Save model weights if needed
-            if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
-                store = {}
-                opt.save_own_variables(store)
-                fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
-                print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
-                print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
-            if VALFREQ > 0 and niter % VALFREQ == 0:
-                # draw example['ambient'], denoised image, flash image, absolute error
-                denoisednp, ambientnp, flashnp, noisy = val_step(example)
-                logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
-            logger.takeStep()
-            # log losses
-            # visualize training
-            # visualize validation
-            # save weights
+        if niter > MAXITER:
+            break
+        niter += 1
+        loss = train_step(example)
+        logger.addScalar(loss.numpy(),'loss')
+        print('iter ',niter, ' loss ', loss.numpy())
+        # Save model weights if needed
+        if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
+            store = {}
+            opt.save_own_variables(store)
+            fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
+            print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
+            print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
+        if VALFREQ > 0 and niter % VALFREQ == 0:
+            # draw example['ambient'], denoised image, flash image, absolute error
+            denoisednp, ambientnp, flashnp, noisy = val_step(example)
+            logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
+        logger.takeStep()
+        # log losses
+        # visualize training
+        # visualize validation
+        # save weights
+        # ut.vprint(niter, 'loss.t', loss)
+        # logger.addScalar(loss,'loss')
+        # logger.takeStep()
+        # loss = l2_loss + gradient_loss + lpips_loss + wlpips_loss
+        # lvals = [loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss]
+        # lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr', "lpips_loss","wlpips_loss"]
 
-            # ut.vprint(niter, 'loss.t', loss)
-            # logger.addScalar(loss,'loss')
-            # logger.takeStep()
-            # loss = l2_loss + gradient_loss + lpips_loss + wlpips_loss
-            # lvals = [loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss]
-            # lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr', "lpips_loss","wlpips_loss"]
+        # tower_loss.append(loss)
+        # tower_lvals.append(lvals)
 
-            # tower_loss.append(loss)
-            # tower_lvals.append(lvals)
-
-            # grads = opt.compute_gradients(
-            #     loss_function, var_list=list())
-            # tower_grads.append(grads)
-                
+        # grads = opt.compute_gradients(
+        #     loss_function, var_list=list())
+        # tower_grads.append(grads)
+            
 fn1, fn2 = logger.save_params(model.weights, opt.get_config(),niter)
 print("Saving model to " + fn1 + " and " + fn2)

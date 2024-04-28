@@ -187,6 +187,7 @@ class TrainSet:
     def __init__(
             self, file_list, bsz, psz, jitter,
             min_scale, max_scale, theta, ngpus, nthreads):
+        nthreads = None
         files = [l.strip() for l in open(file_list)]
 
         gen_homography_fn = functools.partial(
@@ -247,6 +248,7 @@ class _OnFlyValSet:
     def __init__(
             self, file_list, bsz, psz, jitter,
             min_scale, max_scale, theta, ngpus, nthreads):
+        nthreads = None
         files = [l.strip() for l in open(file_list)]
 
         gen_homography_fn = functools.partial(
