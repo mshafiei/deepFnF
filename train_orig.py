@@ -33,6 +33,7 @@ import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset_prefetch import TrainSet
+from utils.dataset import Dataset
 import lpips_tf
 import cvgutils.Viz as Viz
 import time
@@ -124,10 +125,14 @@ def get_lr(niter):
 
 #########################################################################
 
+with tf.device('/cpu:0'):
+    if opts.prefetch_dataset:
+        dataset = TrainSet(TLIST, bsz=BSZ, psz=IMSZ,
+                            ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
+    else:
+        dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
 
 with tf.device('/gpu:0'):
-    # global_step = tf.placeholder(dtype=tf.int64, shape=[])
-    global_step = tf.keras.Input(name="global_step", shape=(), dtype=tf.dtypes.int64)
     niter = 0
     # Set up optimizer
     # lr = tf.placeholder(shape=[], dtype=tf.float32)
@@ -135,8 +140,7 @@ with tf.device('/gpu:0'):
     # opt = tf.train.AdamOptimizer(lr)
     opt = tf.optimizers.Adam(LR)
     # Data loading setup
-    dataset = TrainSet(TLIST, bsz=BSZ, psz=IMSZ,
-                      ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
+
 
 # # Calculate grads for each tower
 #     @tf.function
@@ -261,9 +265,8 @@ with tf.device('/gpu:0'):
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
     # dataset.iterator = dataset.iterator.repeat(10000)
-    for i in range(int(MAXITER)):
-        example = dataset.get_next()
-        niter += 1
+
+    def training_iterate(example, niter):
         loss = train_step(example)
         logger.addScalar(loss.numpy(),'loss')
         print('iter ',niter, ' loss ', loss.numpy())
@@ -279,6 +282,16 @@ with tf.device('/gpu:0'):
             denoisednp, ambientnp, flashnp, noisy = val_step(example)
             logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
         logger.takeStep()
+
+    if(opts.prefetch_dataset):
+        for i in range(int(MAXITER)):
+            niter += 1
+            example = dataset.get_next()
+            training_iterate(example, niter)
+    else:
+        for example in dataset.iterator:
+            niter += 1
+            training_iterate(example, niter)
         # log losses
         # visualize training
         # visualize validation

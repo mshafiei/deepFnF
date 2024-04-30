@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 from six.moves import cPickle as pkl
 from utils.tf_spatial_transformer import transformer
-
+import tqdm
 with open('data/exifs.pkl', 'rb') as f:
     COLOR_MAP_DATA = pkl.load(f)
 
@@ -201,8 +201,9 @@ class TrainSet:
             [COLOR_MAP_DATA[nm][1] for nm in files],
             axis=0).astype(np.float32)
         
+        print('Prefetching dataset')
         self.examples = []
-        for i in range(len(files)):
+        for i in tqdm.trange(len(files)):
             self.examples.append(load_image(files[i], color_matrices[i], adapt_matrices[i]))
         self.indicator = 0
         self.dataset_length = len(file_list)
