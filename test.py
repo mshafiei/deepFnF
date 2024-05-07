@@ -14,46 +14,13 @@ from bilateral import bilateralFilter, bilateralSolve
 from BilateralParallel import bilateral_rgb
 import cvgutils.Linalg as Linalg
 
-def test_idx_model_stats(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors,Gs):
-    
-    data = np.load('%s/%d/%d.npz' % (datapath, k, c))
-    alpha = data['alpha'][None, None, None, None]
-    ambient = data['ambient']
-    dimmed_ambient, _ = tfu.dim_image(data['ambient'], alpha=alpha)
-    dimmed_warped_ambient, _ = tfu.dim_image(
-        data['warped_ambient'], alpha=alpha)
+@tf.function
+def eval_model_w_alpha(model, netinput, alpha):
+    return model.forward(netinput, alpha)
 
-    # Make the flash brighter by increasing the brightness of the
-    # flash-only image.
-    flash = data['flash_only'] * ut.FLASH_STRENGTH + dimmed_ambient
-    warped_flash = data['warped_flash_only'] * \
-        ut.FLASH_STRENGTH + dimmed_warped_ambient
-
-    noisy_ambient = data['noisy_ambient']
-    noisy_flash = data['noisy_warped_flash']
-    # noisy_flash = warped_flash[0,0,0,0,:,:,:,:]
-    noisy = tf.concat([noisy_ambient, noisy_flash], axis=-1)
-    noise_std = tfu.estimate_std(
-        noisy, data['sig_read'], data['sig_shot'])
-    net_input = tf.concat([noisy, noise_std], axis=-1)
-
-    start = time.time()
-    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf'):
-        denoise = model.forward(net_input, data['alpha'])
-    else:
-        denoise = model.forward(net_input)
-
-    
-    opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()   
-    g, run_meta = Gs
-    flops = tf.compat.v1.profiler.profile(g, run_meta=run_meta, cmd='op', options=opts)
-    gflops = flops.total_float_ops/(1024*1024*1024)
-    if(hasattr(model,'weights')):
-        nparams = int(np.sum([np.prod(model.weights[i].shape) for i in model.weights]))
-    else:
-        nparams = 0
-    return {"gflops":gflops,"nparams":nparams}
-
+@tf.function
+def eval_model(model, netinput):
+    return model.forward(netinput)
 def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval):
     levelKey = 'Level %d' % (4 - k)
     data = np.load('%s/%d/%d.npz' % (datapath, k, c))
@@ -78,10 +45,10 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     net_input = tf.concat([noisy, noise_std], axis=-1)
     
     start = time.time_ns()
-    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf'):
-        denoise = model.forward(net_input, data['alpha'])
+    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'deepfnf_combine_laplacian_pixelwise' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf'):
+        denoise = eval_model_w_alpha(model, net_input, data['alpha'])
     else:
-        denoise = model.forward(net_input)
+        denoise = eval_model(model, net_input)
 
     end = time.time_ns()
     print('forward pass takes ', (end - start)/1000000, 'ms')
@@ -168,7 +135,6 @@ def test(model, model_path, datapath,logger):
         i_val = idx % 128
     errors = {}
     errors_dict = {}
-    # stats = test_idx_model_stats(datapath,0,0,metrics_tmp,metrics_list_tmp,logger,model,errors_dict,errors,g)
     # logger.dumpDictJson(stats,'model_stats','train')
     errval = Linalg.ErrEval('cuda','ssim,msssim,mse,psnr,lpipsAlex,lpipsAlexWeighted')
     metrics_list = logger.loadDictJson('test_errors_samples','test')

@@ -17,7 +17,7 @@ import argparse
 
 import utils.np_utils as npu
 import numpy as np
-from test import test, test_idx_model_stats
+from test import test
 import net_ksz3
 import net
 from net_laplacian_combine import Net as netLaplacianCombine
@@ -99,18 +99,9 @@ def load_net(fn, model):
     return model
 
 if(opts.mode == 'test'):
-    g = tf.Graph()
-    run_meta = tf.RunMetadata()
-    Gs = [g, run_meta]
-    with g.as_default():
-        model = CreateNetwork(opts)
-        print("Restoring model from " + opts.weight_file)
-        model = load_net(opts.weight_file, model)
-        stats = test_idx_model_stats(opts.TESTPATH,0,0,{},{},logger,model,{},{},Gs)
-        logger.dumpDictJson(stats,'model_stats','test')
-
     model = CreateNetwork(opts)
-    model = load_net(opts.weight_file, model)
+    params = logger.load_params()
+    model.weights = params['params']
     test(model, opts.weight_file, opts.TESTPATH,logger)
     exit(0)
 else:
