@@ -205,26 +205,23 @@ class TrainSet:
         self.examples = []
         for i in tqdm.trange(len(files)):
             self.examples.append(load_image(files[i], color_matrices[i], adapt_matrices[i]))
+        self.idx = list(range(len(files)))
+        dataset = tf.data.Dataset.from_tensor_slices(self.idx)
+        # example_fetch = lambda i:self.examples[i]
+        def example_fetch(i):
+            print(i)
+            self.examples[i]
+        self.dataset = (dataset
+                        .repeat()
+                        .shuffle(buffer_size=len(files))
+                        .map(example_fetch)
+                        .map(gen_homography_fn, num_parallel_calls=nthreads)
+                        .map(gen_random_params, num_parallel_calls=nthreads)
+                        .batch(bsz)
+                        .prefetch(ngpus)
+                        )
         
-        self.indicator = 0
-        self.dataset_length = len(files)
-        print('Prefetched ',len(self.examples), ' entities. Length is ',self.dataset_length)
-
-    def get_next(self):
-        example = self.examples[self.indicator].copy()
-        example = self.gen_homography_fn(example)
-        example = gen_random_params(example)
-        example['ambient'] = example['ambient'][None,...]
-        example['flash_only'] = example['flash_only'][None,...]
-        example['warped_flash_only'] = example['warped_flash_only'][None,...]
-        example['warped_ambient'] = example['warped_ambient'][None,...]
-        example['color_matrix'] = example['color_matrix'][None,...]
-        example['adapt_matrix'] = example['adapt_matrix'][None,...]
-        example['alpha'] = example['alpha'][None,None,None,None,...]
-        example['sig_read'] = example['sig_read'][None,None,None,None,...]
-        self.indicator = (self.indicator + 1) % self.dataset_length
-        return example
-    
+        self.iterator = self.dataset
 
 
 class ValSet:

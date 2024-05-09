@@ -32,7 +32,8 @@ from net_slim import Net as NetSlim
 import unet
 import utils.utils as ut
 import utils.tf_utils as tfu
-from utils.dataset_prefetch import TrainSet
+from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
+from utils.dataset_prefetch_nthreads import TrainSet as TrainSet_prefetch_nthread
 from utils.dataset import Dataset
 import lpips_tf
 import cvgutils.Viz as Viz
@@ -117,8 +118,11 @@ def get_lr(niter):
 #########################################################################
 
 with tf.device('/cpu:0'):
-    if opts.prefetch_dataset:
-        dataset = TrainSet(TLIST, bsz=BSZ, psz=IMSZ,
+    if opts.dataset_model == 'prefetch_nthread':
+        dataset = TrainSet_prefetch_nthread(TLIST, bsz=BSZ, psz=IMSZ,
+                            ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
+    if opts.dataset_model == 'prefetch':
+        dataset = TrainSet_prefetch(TLIST, bsz=BSZ, psz=IMSZ,
                             ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     else:
         dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
@@ -274,7 +278,7 @@ with tf.device('/gpu:0'):
             logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
         logger.takeStep()
 
-    if(opts.prefetch_dataset):
+    if(opts.dataset_model == 'prefetch' or opts.dataset_model == 'prefetch_nthread'):
         for i in range(int(MAXITER)):
             niter += 1
             example = dataset.get_next()

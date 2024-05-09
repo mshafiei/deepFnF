@@ -46,7 +46,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--bs_lam', type=float,default=10,help='number of basis')
     parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf_combine_laplacian_pixelwise', 'deepfnf_llf','deepfnf','deepfnf_fft','unet', 'deepfnf_grad','deepfnf_combine_fft','deepfnf_combine_laplacian','net_flash_image','deepfnf-slim'],help='Neural network model')
     parser.add_argument('--scalemap', type=str_to_bool,default=True,nargs='?', const=True,help='Use scalemap?')
-    parser.add_argument('--prefetch_dataset', type=str_to_bool,default=True,nargs='?', const=True,help='Use prefetch dataset?')
+    parser.add_argument('--dataset_model', type=str, default='default', choices=['default','prefetch','prefetch_nthread'], help='Validation dataset')
     parser.add_argument('--sigmoid_offset', type=float,default=0.1,help='Jitter')
     parser.add_argument('--sigmoid_intensity', type=float,default=10,help='Jitter')
 
