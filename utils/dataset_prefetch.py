@@ -8,6 +8,7 @@ import tensorflow as tf
 from six.moves import cPickle as pkl
 from utils.tf_spatial_transformer import transformer
 import tqdm
+
 with open('data/exifs.pkl', 'rb') as f:
     COLOR_MAP_DATA = pkl.load(f)
 
@@ -16,6 +17,20 @@ DATA_NAMES = [
     'color_matrix', 'adapt_matrix', 'alpha', 'sig_read', 'sig_shot',
 ]
 
+dataset_elements_ambient = []
+dataset_elements_flash = []
+
+def load_dataset_elements(ambient, flash, color_matrix, adapt_matrix):
+    '''Load image and its camera matrices'''
+    example = {}
+    example['ambient'] = ambient
+    example['flash_only'] = flash
+    # example['ambient'] = dataset_elements_ambient[idx].copy()
+    # example['flash_only'] = dataset_elements_flash[idx].copy()
+
+    example['color_matrix'] = color_matrix
+    example['adapt_matrix'] = adapt_matrix
+    return example
 
 def load_image(filename, color_matrix, adapt_matrix):
     '''Load image and its camera matrices'''
@@ -190,7 +205,7 @@ class TrainSet:
         nthreads = None
         files = [l.strip() for l in open(file_list)]
 
-        self.gen_homography_fn = functools.partial(
+        gen_homography_fn = functools.partial(
             gen_homography, jitter=jitter, min_scale=min_scale,
             max_scale=max_scale, theta=theta, psz=psz)
 
@@ -200,31 +215,54 @@ class TrainSet:
         adapt_matrices = np.stack(
             [COLOR_MAP_DATA[nm][1] for nm in files],
             axis=0).astype(np.float32)
-        
-        print('Prefetching dataset')
-        self.examples = []
-        for i in tqdm.trange(len(files)):
-            self.examples.append(load_image(files[i], color_matrices[i], adapt_matrices[i]))
-        
-        self.indicator = 0
-        self.dataset_length = len(files)
-        print('Prefetched ',len(self.examples), ' entities. Length is ',self.dataset_length)
 
-    def get_next(self):
-        example = self.examples[self.indicator].copy()
-        example = self.gen_homography_fn(example)
-        example = gen_random_params(example)
-        example['ambient'] = example['ambient'][None,...]
-        example['flash_only'] = example['flash_only'][None,...]
-        example['warped_flash_only'] = example['warped_flash_only'][None,...]
-        example['warped_ambient'] = example['warped_ambient'][None,...]
-        example['color_matrix'] = example['color_matrix'][None,...]
-        example['adapt_matrix'] = example['adapt_matrix'][None,...]
-        example['alpha'] = example['alpha'][None,None,None,None,...]
-        example['sig_read'] = example['sig_read'][None,None,None,None,...]
-        self.indicator = (self.indicator + 1) % self.dataset_length
-        return example
-    
+        # dataset = tf.data.Dataset.zip((
+        #     tf.data.Dataset.range(len(files)),
+        #     tf.data.Dataset.from_tensor_slices(color_matrices),
+        #     tf.data.Dataset.from_tensor_slices(adapt_matrices)
+        # ))
+
+        print('prefetching dataset')
+        for filename in tqdm.tqdm(files):
+            image_ambient = tf.io.read_file(filename + '_ambient.png')
+            image_ambient = tf.image.decode_png(image_ambient, channels=3, dtype=tf.uint16)
+            if(image_ambient.shape[0] == 1080):
+                image_ambient = tf.transpose(image_ambient,(1,0,2))
+            
+
+            image_flash = tf.io.read_file(filename + '_flash.png')
+            image_flash = tf.image.decode_png(image_flash, channels=3, dtype=tf.uint16)
+            if(image_flash.shape[0] == 1080):
+                image_flash = tf.transpose(image_flash,(1,0,2))
+            if(image_ambient.shape[0] < 1440 or image_ambient.shape[1] < 1080 or image_flash.shape[0] < 1440 or image_flash.shape[1] < 1080):
+                print('skipping ', filename)
+                continue
+            dataset_elements_ambient.append(tf.cast(image_flash[:1440,:1080], tf.float32) / 65535.)
+            dataset_elements_flash.append(tf.cast(image_ambient[:1440,:1080], tf.float32) / 65535.)
+        
+        dataset = tf.data.Dataset.zip((
+            tf.data.Dataset.from_tensor_slices(dataset_elements_ambient),
+            tf.data.Dataset.from_tensor_slices(dataset_elements_flash),
+            tf.data.Dataset.from_tensor_slices(color_matrices),
+            tf.data.Dataset.from_tensor_slices(adapt_matrices)
+        ))
+            
+        self.dataset = (dataset
+                        .repeat()
+                        .shuffle(buffer_size=len(files))
+                        .map(load_dataset_elements, num_parallel_calls=nthreads)
+                        .map(gen_homography_fn, num_parallel_calls=nthreads)
+                        .map(gen_random_params, num_parallel_calls=nthreads)
+                        .batch(bsz)
+                        .prefetch(ngpus)
+                        )
+        self.iterator = self.dataset
+
+        # self.output_types = self.dataset.output_types
+        # self.output_shapes = self.dataset.output_shapes
+
+    def get_handle(self, sess):
+        return sess.run(self.iterator.string_handle())
 
 
 class ValSet:

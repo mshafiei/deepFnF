@@ -38,12 +38,22 @@ from utils.dataset import Dataset
 import lpips_tf
 import cvgutils.Viz as Viz
 import time
+from tensorflow.python.profiler import profiler_v2 as profiler
+# profiler.warmup()
+device = tf.config.list_physical_devices('GPU')[0]
+tf.config.experimental.set_memory_growth(device, True)
 # tf.config.run_functions_eagerly(True)
 
 
 logger = Viz.logger(opts,opts.__dict__)
 _, weight_dir = logger.path_parse('train')
 opts.weight_file = os.path.join(weight_dir,opts.weight_file)
+
+# profiler_path = os.path.join(weight_dir,'profiler')
+# if(not os.path.exists(profiler_path)):
+#     os.makedirs(profiler_path)
+# profiler.start(logdir=profiler_path)
+
 
 print("weights_dir: ",weight_dir)
 opts = logger.opts
@@ -126,14 +136,16 @@ with tf.device('/cpu:0'):
                             ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     else:
         dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
-
+    opt = tf.keras.optimizers.Adam(learning_rate=LR)
+    
 with tf.device('/gpu:0'):
     niter = 0
     # Set up optimizer
     # lr = tf.placeholder(shape=[], dtype=tf.float32)
-    lr = tf.keras.Input(name="lr", shape=(), dtype=tf.dtypes.float32)
+    # lr = tf.keras.Input(name="lr", shape=(), dtype=tf.dtypes.float32)
     # opt = tf.train.AdamOptimizer(lr)
-    opt = tf.optimizers.Adam(LR)
+    # opt = tf.optimizers.Adam(LR)
+    
     # Data loading setup
 
 
@@ -218,7 +230,6 @@ with tf.device('/gpu:0'):
     @tf.function
     def train_step(example):
         net_input, alpha, _, _ = prepare_input(example)
-
 # 0.013875767
         # psnr = tfu.get_psnr(denoise, ambient)
         # if(opts.lpips):
@@ -252,18 +263,18 @@ with tf.device('/gpu:0'):
             gradient_loss = tfu.gradient_loss(denoise, ambient)
             loss = l2_loss + gradient_loss
 
-        gradients = tape.gradient(loss, list(model.weights.values()))
-        opt.apply_gradients(zip(gradients,list(model.weights.values())))
-        # opt.minimize(zip([gradients],[model.weights]))
-        # opt.minimize(loss, list(model.weights.values()), tape=tape)
+        # gradients = tape.gradient(loss, model.weights.values())
+        # opt.apply_gradients(zip(gradients,model.weights.values()))
+        opt.minimize(loss, model.weights.values(), tape=tape)
         return loss
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
     # dataset.iterator = dataset.iterator.repeat(10000)
 
     def training_iterate(example, niter):
+        # print('alpha ', example['alpha'])
         loss = train_step(example)
-        logger.addScalar(loss.numpy(),'loss')
+        # logger.addScalar(loss.numpy(),'loss')
         print('iter ',niter, ' loss ', loss.numpy())
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -278,15 +289,22 @@ with tf.device('/gpu:0'):
             logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
         logger.takeStep()
 
-    if(opts.dataset_model == 'prefetch' or opts.dataset_model == 'prefetch_nthread'):
+    if(opts.dataset_model == 'prefetch_nthread'):
         for i in range(int(MAXITER)):
             niter += 1
             example = dataset.get_next()
             training_iterate(example, niter)
+            a = tf.config.experimental.get_memory_usage(device='GPU:0')
+            b = tf.config.experimental.get_memory_info('GPU:0')
+            print('a ', a, ' b ', b)
+            del example
     else:
         for example in dataset.iterator:
             niter += 1
             training_iterate(example, niter)
+            a = tf.config.experimental.get_memory_usage(device='GPU:0')
+            b = tf.config.experimental.get_memory_info('GPU:0')
+            print('a ', a, ' b ', b)
         # log losses
         # visualize training
         # visualize validation
@@ -305,5 +323,6 @@ with tf.device('/gpu:0'):
         #     loss_function, var_list=list())
         # tower_grads.append(grads)
             
+# profiler.stop()
 fn1, fn2 = logger.save_params(model.weights, opt.get_config(),niter)
 print("Saving model to " + fn1 + " and " + fn2)
