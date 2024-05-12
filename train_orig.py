@@ -35,6 +35,7 @@ import utils.tf_utils as tfu
 from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
 from utils.dataset_prefetch_nthreads import TrainSet as TrainSet_prefetch_nthread
 from utils.dataset import Dataset
+from utils.dataset_filelock import TrainSet as Trainset_filelock
 import lpips_tf
 import cvgutils.Viz as Viz
 import time
@@ -131,8 +132,11 @@ with tf.device('/cpu:0'):
     if opts.dataset_model == 'prefetch_nthread':
         dataset = TrainSet_prefetch_nthread(TLIST, bsz=BSZ, psz=IMSZ,
                             ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
-    if opts.dataset_model == 'prefetch':
+    elif opts.dataset_model == 'prefetch':
         dataset = TrainSet_prefetch(TLIST, bsz=BSZ, psz=IMSZ,
+                            ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
+    elif opts.dataset_model == 'filelock':
+        dataset = Trainset_filelock(TLIST, bsz=BSZ, psz=IMSZ,
                             ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     else:
         dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
@@ -263,9 +267,9 @@ with tf.device('/gpu:0'):
             gradient_loss = tfu.gradient_loss(denoise, ambient)
             loss = l2_loss + gradient_loss
 
-        # gradients = tape.gradient(loss, model.weights.values())
-        # opt.apply_gradients(zip(gradients,model.weights.values()))
-        opt.minimize(loss, model.weights.values(), tape=tape)
+        gradients = tape.gradient(loss, model.weights.values())
+        opt.apply_gradients(zip(gradients,model.weights.values()))
+        # opt.minimize(loss, model.weights.values(), tape=tape)
         return loss
 # Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
 # dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
