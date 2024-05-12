@@ -229,15 +229,13 @@ class TrainSet:
         else:
             print('prefetching dataset')
             for filename in tqdm.tqdm(files):
-                with FileLock(filename + '_ambient.txt'):
-                    image_ambient = tf.io.read_file(filename + '_ambient.png')
-                    image_ambient = tf.image.decode_png(image_ambient, channels=3, dtype=tf.uint16)
+                image_ambient = tf.io.read_file(filename + '_ambient.png')
+                image_ambient = tf.image.decode_png(image_ambient, channels=3, dtype=tf.uint16)
                 if(image_ambient.shape[0] == 1080):
                     image_ambient = tf.transpose(image_ambient,(1,0,2))
                 
-                with FileLock(filename + '_flash.txt'):
-                    image_flash = tf.io.read_file(filename + '_flash.png')
-                    image_flash = tf.image.decode_png(image_flash, channels=3, dtype=tf.uint16)
+                image_flash = tf.io.read_file(filename + '_flash.png')
+                image_flash = tf.image.decode_png(image_flash, channels=3, dtype=tf.uint16)
                 if(image_flash.shape[0] == 1080):
                     image_flash = tf.transpose(image_flash,(1,0,2))
                 if(image_ambient.shape[0] < 1440 or image_ambient.shape[1] < 1080 or image_flash.shape[0] < 1440 or image_flash.shape[1] < 1080):
