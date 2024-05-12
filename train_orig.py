@@ -302,9 +302,8 @@ with tf.device('/gpu:0'):
         for example in dataset.iterator:
             niter += 1
             training_iterate(example, niter)
-            a = tf.config.experimental.get_memory_usage(device='GPU:0')
             b = tf.config.experimental.get_memory_info('GPU:0')
-            print('a ', a, ' b ', b)
+            print(b)
         # log losses
         # visualize training
         # visualize validation
