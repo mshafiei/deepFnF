@@ -10,4 +10,3 @@ cmd2="$server_path/experiments/run.sh $1"
 echo $cmd1 "$cmd2"
 
 cd /home/mohammad/cvgutils/cluster_control/deployments/
-$cmd1 "$cmd2"
