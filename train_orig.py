@@ -304,10 +304,10 @@ with tf.device('/gpu:0'):
             del example
     else:
         for example in dataset.iterator:
+            if(niter > MAXITER):
+                break
             niter += 1
             training_iterate(example, niter)
-            b = tf.config.experimental.get_memory_info('GPU:0')
-            print(b)
         # log losses
         # visualize training
         # visualize validation
