@@ -1,6 +1,6 @@
 #!/bin/bash
 ngpus=1
-ncpus=1
+ncpus=5
 meml=105G
 memr=95G
 

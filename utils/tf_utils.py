@@ -518,6 +518,9 @@ def MergeLaplacian(laplacian):
     
     return coarse
 
+def laplacian_interpolation_function(x,n,alpha, intensity):
+   return tf.exp(-intensity*(x/n-alpha))
+   
 def InterpolateLaplacian(source, target, alpha, intensity):
     #source and target are find (index 0) to coarse (last index) pyramids
     assert len(target) == len(source), "lengths of source and target do not match"
@@ -525,7 +528,7 @@ def InterpolateLaplacian(source, target, alpha, intensity):
     output = [0]*len(source)
     output[-1] = source[-1]
     for k, (i, j) in enumerate(zip(source[:-1], target[:-1])):
-        beta = 1/ (1+tf.exp(-intensity*(k/n-alpha)))
+        beta = 1 / (1 + laplacian_interpolation_function(k, n, alpha, intensity))
         output[k] = beta * i + (1-beta) * j
         
     return output
@@ -546,6 +549,11 @@ def dumpPyramid(pyramid,dr):
     for j, i in enumerate(pyramid):
         im = np.abs(np.array(i[0,:,:,:])*10)
         cv2.imwrite(os.path.join(dr,'%i.png'%j), (np.clip(im,0,1)*255).astype(np.uint8))
+
+def interpolated_laplacian(flash,denoise,x0,k,n):
+    laplacianflash = split(flash, n)
+    laplacianblur = split(denoise, n)
+    return InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
 
 def combineFNFInLaplacian(flash,denoise,x0,k,n):
     laplacianflash = split(flash, n)

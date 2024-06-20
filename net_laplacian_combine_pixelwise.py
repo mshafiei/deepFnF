@@ -203,6 +203,9 @@ class Net:
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
 
+    def getLaplacianWeights(self):
+        return [self.pyramid_x0_4,self.pyramid_x0_3,self.pyramid_x0_2,self.pyramid_x0_1,self.pyramid_x0_0]
+
     def forward(self, inp, alpha):
         # time1 = time.time_ns() / 1000000
         self.predict_coeff(inp)

@@ -49,6 +49,8 @@ def parse_arguments_deepfnf():
     parser.add_argument('--dataset_model', type=str, default='default', choices=['default','filelock','prefetch','prefetch_nthread'], help='Validation dataset')
     parser.add_argument('--sigmoid_offset', type=float,default=0.1,help='Jitter')
     parser.add_argument('--sigmoid_intensity', type=float,default=10,help='Jitter')
+    parser.add_argument('--test_set_count', type=int,default=128,help='test_set_count')
+    
 
     parser = Viz.logger.parse_arguments(parser)
     return parser

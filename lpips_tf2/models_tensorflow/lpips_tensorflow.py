@@ -15,7 +15,7 @@ def image_preprocess(image):
     return image
 
 
-def learned_perceptual_metric_model(image_size, vgg_model_ckpt_fn, lin_model_ckpt_fn):
+def learned_perceptual_metric_model(image_size, vgg_model_ckpt_fn, lin_model_ckpt_fn,spatial=False):
     # initialize all models
     net = perceptual_model(image_size)
     lin = linear_model(image_size)
@@ -50,18 +50,22 @@ def learned_perceptual_metric_model(image_size, vgg_model_ckpt_fn, lin_model_ckp
     # run on learned linear model
     lin_out = lin(diffs)
 
-    # take spatial average: list([N, 1], [N, 1], [N, 1], [N, 1], [N, 1])
-    lin_out = [Lambda(lambda x: tf.reduce_mean(x, axis=[2, 3], keepdims=False))(t) for t in lin_out]
+    if(spatial):
+        L = [Lambda(lambda x: tf.image.resize(tf.transpose(x,[0,2,3,1]), lin_out[0].shape[-2:]))(x) for x in lin_out]
+        L = Lambda(lambda x: tf.concat(x,-1) * len(x), output_shape=(L[0].shape[1], L[0].shape[2],5))(L)
+        lin_out = Lambda(lambda x:tf.reduce_mean(x,-1))(L)
+    else:
+        # take spatial average: list([N, 1], [N, 1], [N, 1], [N, 1], [N, 1])
+        lin_out = [Lambda(lambda x: tf.reduce_mean(x, axis=[2, 3], keepdims=False))(t) for t in lin_out]
 
-    # take sum of all layers: [N, 1]
-    lin_out = Lambda(lambda x: tf.add_n(x))(lin_out)
-    
-    # squeeze: [N, ]
-    lin_out = Lambda(lambda x: tf.squeeze(x, axis=-1))(lin_out)
+        # take sum of all layers: [N, 1]
+        lin_out = Lambda(lambda x: tf.add_n(x))(lin_out)
+        
+        # squeeze: [N, ]
+        lin_out = Lambda(lambda x: tf.squeeze(x, axis=-1))(lin_out)
 
     final_model = Model(inputs=[input1, input2], outputs=lin_out)
     return final_model
-
 
 # [64, 64, 3] -> [64, 64, 3, 1] -> [1, 3, 64, 64]
 # Sequential(

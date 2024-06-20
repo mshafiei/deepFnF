@@ -3,6 +3,8 @@ from arguments_deepfnf import parse_arguments_deepfnf
 parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
 import tensorflow as tf
+# device = tf.config.list_physical_devices('GPU')[0]
+# tf.config.experimental.set_memory_growth(device, True)
 # if(opts.mode == "train"):
 #     # tf.disable_v2_behavior()
 #     # tf.enable_eager_execution()
@@ -20,6 +22,7 @@ import numpy as np
 from test import test
 import net_ksz3
 import net
+import net_cheap as netCheap
 from net_laplacian_combine import Net as netLaplacianCombine
 # from net_llf import Net as netLLF
 from net_fft_combine import Net as netFFTCombine
@@ -36,14 +39,22 @@ from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
 from utils.dataset_prefetch_nthreads import TrainSet as TrainSet_prefetch_nthread
 from utils.dataset import Dataset
 from utils.dataset_filelock import TrainSet as Trainset_filelock
-import lpips_tf
+import nn.lpips_tf2
 import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
-# profiler.warmup()
-device = tf.config.list_physical_devices('GPU')[0]
-tf.config.experimental.set_memory_growth(device, True)
+from lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
 # tf.config.run_functions_eagerly(True)
+
+image_size=448
+ckpt_dir = './lpips_tf2/weights/keras'
+vgg_ckpt_fn = os.path.join(ckpt_dir, 'vgg', 'exported.weights.h5')
+lin_ckpt_fn = os.path.join(ckpt_dir, 'lin', 'exported.weights.h5')
+lpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn)
+
+# profiler.warmup()
+
+
 
 
 logger = Viz.logger(opts,opts.__dict__)
@@ -94,6 +105,7 @@ def CreateNetwork(opts):
     elif(opts.model == 'deepfnf' and opts.ksz == 3):
         model = net_ksz3.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf'):
+        # model = netCheap.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
         model = net.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf-slim'):
         model = NetSlim(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
@@ -113,7 +125,8 @@ def load_net(fn, model):
 if(opts.mode == 'test'):
     model = CreateNetwork(opts)
     params = logger.load_params()
-    model.weights = params['params']
+    if (params is not None) and ('params' in params.keys()):
+        model.weights = params['params']
     test(model, opts.weight_file, opts.TESTPATH,logger)
     exit(0)
 else:
@@ -265,7 +278,8 @@ with tf.device('/gpu:0'):
             # Loss
             l2_loss = tfu.l2_loss(denoise, ambient)
             gradient_loss = tfu.gradient_loss(denoise, ambient)
-            loss = l2_loss + gradient_loss
+            lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
+            loss = l2_loss + gradient_loss + opts.lpips * lpips_loss[0]
 
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
@@ -292,7 +306,8 @@ with tf.device('/gpu:0'):
             denoisednp, ambientnp, flashnp, noisy = val_step(example)
             logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
         logger.takeStep()
-
+    
+    # fn1, fn2 = logger.save_params(model.weights, opt.get_config(),niter)
     if(opts.dataset_model == 'prefetch_nthread'):
         for i in range(int(MAXITER)):
             niter += 1

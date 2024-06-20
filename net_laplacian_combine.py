@@ -7,7 +7,7 @@ import utils.tf_utils as tfu
 import time
 
 class Net:
-    def __init__(self, x0, k, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448):
+    def __init__(self, x0, k, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448, laplacian_levels=5):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
@@ -19,6 +19,7 @@ class Net:
         self.IMSZ = IMSZ
         self.x0 = x0
         self.k = k
+        self.laplacian_levels = laplacian_levels
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -32,7 +33,7 @@ class Net:
             w = self.weights[wnm]
         else:
             sq = np.sqrt(3.0 / np.float32(ksz[0] * ksz[1] * ksz[2]))
-            w = tf.Variable(tf.random_uniform(
+            w = tf.Variable(tf.random.uniform(
                 ksz, minval=-sq, maxval=sq, dtype=tf.float32))
             self.weights[wnm] = w
 
@@ -87,7 +88,7 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
+        out = tf.compat.v1.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
@@ -113,7 +114,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.image.resize_bilinear(out, 2 * shape[1:3])
+        out = tf.compat.v1.image.resize_bilinear(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
@@ -198,8 +199,8 @@ class Net:
         self.kernels = tf.reshape(
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
-
-    def forward(self, inp, alpha):
+    
+    def deepfnfDenoising(self, inp, alpha):
         time1 = time.time_ns() / 1000000
         self.predict_coeff(inp)
         time2 = time.time_ns() / 1000000
@@ -225,12 +226,23 @@ class Net:
         time8 = time.time_ns() / 1000000
         denoised = filtered_ambient * self.scale
         flash = inp[:, :, :, 3:6] * alpha
-        if(self.x0 == 0 and self.k == 0):
-            combined = tfu.combineFNFInLaplacian(flash,flash,self.x0,self.k,5)    
-        else:
-            combined = tfu.combineFNFInLaplacian(flash,denoised,self.x0,self.k,5)
-        time10 = time.time_ns() / 1000000
+        return denoised, flash
 
-        print('predict_coeff ',time2-time1,' create_basis ',time3-time2, ' combine ',time4 - time3, ' apply_filtering ',time5-time4, ' bilinear_filter ', time6 - time5, ' apply_dilated_filtering ',time7-time6, '  denoised  ',time10 - time8)
+    def pyramid(self, inp, alpha):
+        denoised, flash = self.deepfnfDenoising(inp, alpha)
+        if(self.x0 == 0 and self.k == 0):
+            return tfu.interpolated_laplacian(flash,flash,self.x0,self.k,self.laplacian_levels)
+        else:
+            return tfu.interpolated_laplacian(flash,denoised,self.x0,self.k,self.laplacian_levels)
+        
+    def forward(self, inp, alpha):
+        denoised, flash = self.deepfnfDenoising(inp, alpha)
+        if(self.x0 == 0 and self.k == 0):
+            combined = tfu.combineFNFInLaplacian(flash,flash,self.x0,self.k,self.laplacian_levels)    
+        else:
+            combined = tfu.combineFNFInLaplacian(flash,denoised,self.x0,self.k,self.laplacian_levels)
+        # time10 = time.time_ns() / 1000000
+
+        # print('predict_coeff ',time2-time1,' create_basis ',time3-time2, ' combine ',time4 - time3, ' apply_filtering ',time5-time4, ' bilinear_filter ', time6 - time5, ' apply_dilated_filtering ',time7-time6, '  denoised  ',time10 - time8)
         
         return combined
