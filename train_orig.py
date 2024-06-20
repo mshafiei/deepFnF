@@ -39,12 +39,11 @@ from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
 from utils.dataset_prefetch_nthreads import TrainSet as TrainSet_prefetch_nthread
 from utils.dataset import Dataset
 from utils.dataset_filelock import TrainSet as Trainset_filelock
-import nn.lpips_tf2
 import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 from lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 image_size=448
 ckpt_dir = './lpips_tf2/weights/keras'
