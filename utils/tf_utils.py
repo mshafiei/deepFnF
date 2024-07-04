@@ -8,7 +8,7 @@ from six.moves import range
 import imageio
 import cv2
 import os
-
+import tensorflow_graphics.image.pyramid as tfgip
 CONVERSION_MATRICES = {
     "xyz_to_rgb": np.array(
         (
@@ -74,7 +74,7 @@ def gamma_correct(x):
 def camera_to_rgb(imgs, color_matrix, adapt_matrix):
     b, c = tf.shape(imgs)[0], tf.shape(imgs)[-1]
     imsp = tf.shape(imgs)
-    imgs = tf.reshape(imgs, [b, -1, c])
+    imgs = tf.reshape(tf.cast(imgs,np.float32), [b, -1, c])
     imgs = tf.transpose(imgs, [0, 2, 1])
 
     xyz = tf.linalg.solve(color_matrix, imgs)
@@ -290,7 +290,7 @@ def _downsample(image,
 
   """
   return tf.nn.conv2d(
-      input=image, filters=kernel, strides=[1, 2, 2, 1], padding="SAME")
+      input=image, filters=kernel, strides=[1, kernel.shape[0]//2, kernel.shape[1]//2, 1], padding="SAME")
 
 
 def _binomial_kernel(num_channels: int,
@@ -386,7 +386,7 @@ def _upsample(image,
       image,
       kernel * 4.0,
       output_shape=output_shape,
-      strides=[1, 2, 2, 1],
+      strides=[1, kernel.shape[0]//2, kernel.shape[1]//2, 1],
       padding="SAME")
 
 
@@ -518,18 +518,62 @@ def MergeLaplacian(laplacian):
     
     return coarse
 
-def laplacian_interpolation_function(x,n,alpha, intensity):
-   return tf.exp(-intensity*(x/n-alpha))
+def laplacian_interpolation_linear(x, source, target):
+   return x * source + (1-x) * target
+
+def laplacian_interpolation_product(x, source, target):
+   intersect = source * target
+   return (1+x)*source
+
+def laplacian_interpolation_factor(x,n,alpha, intensity):
+  #  return 1/(1+tf.exp(-intensity*(x/n-alpha)))
+   if(type(x) == int):
+    if(x == 0):
+        return 0
+    elif(x == 1):
+        return 0
+    elif(x == 2):
+        return 0
+    elif(x == 3):
+        return 0
+    elif(x == 4):
+        return 0
+    elif(x == 5):
+        return 0
+    else:
+        return 0
+   else:
+    x1 = []
+    for x0 in x:
+      if(x0 == 0):
+          x1.append(0)
+      elif(x0 == 1):
+          x1.append(0)
+      elif(x0 == 2):
+          x1.append(0)
+      elif(x0 == 3):
+          x1.append(0)
+      elif(x0 == 4):
+          x1.append(0)
+      elif(x0 == 5):
+          x1.append(0)
+      else:
+          x1.append(0)
+    return x1
    
-def InterpolateLaplacian(source, target, alpha, intensity):
+def InterpolateLaplacian(source, target, alpha, intensity, interpolation_type='linear'):
     #source and target are find (index 0) to coarse (last index) pyramids
     assert len(target) == len(source), "lengths of source and target do not match"
     n = float(len(source))
     output = [0]*len(source)
     output[-1] = source[-1]
-    for k, (i, j) in enumerate(zip(source[:-1], target[:-1])):
-        beta = 1 / (1 + laplacian_interpolation_function(k, n, alpha, intensity))
-        output[k] = beta * i + (1-beta) * j
+    for k, (source_laplacian, target_laplacian) in enumerate(zip(source[:-1], target[:-1])):
+        beta = laplacian_interpolation_factor(k, n, alpha, intensity)
+        if(interpolation_type == 'linear'):
+          output[k] = laplacian_interpolation_linear(beta, source_laplacian, target_laplacian)
+        if(interpolation_type == 'product'):
+           output[k] = laplacian_interpolation_product(beta, source_laplacian, target_laplacian)
+
         
     return output
 
@@ -556,10 +600,15 @@ def interpolated_laplacian(flash,denoise,x0,k,n):
     return InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
 
 def combineFNFInLaplacian(flash,denoise,x0,k,n):
-    laplacianflash = split(flash, n)
-    laplacianblur = split(denoise, n)
-    interpolatedLaplacian = InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
-    return MergeLaplacian(interpolatedLaplacian)
+    # laplacianflash = split(flash, n)
+    # laplacianblur = split(denoise, n)
+    # interpolatedLaplacian = InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
+    # return MergeLaplacian(laplacianblur)
+   laplacianflash = tfgip.split(flash,n)
+   laplacianblur = tfgip.split(denoise,n)
+   interpolatedLaplacian = InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
+   return tfgip.merge(interpolatedLaplacian)
+
 
 def combineFNFInLaplacianPixelWise(flash,denoise,x0):
     laplacianflash = split(flash, len(x0))

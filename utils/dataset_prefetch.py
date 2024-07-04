@@ -205,7 +205,7 @@ class TrainSet:
             self, file_list, bsz, psz, jitter,
             min_scale, max_scale, theta, ngpus, nthreads):
         files = [l.strip() for l in open(file_list)]
-
+        self.length = len(files)
         gen_homography_fn = functools.partial(
             gen_homography, jitter=jitter, min_scale=min_scale,
             max_scale=max_scale, theta=theta, psz=psz)
@@ -254,7 +254,7 @@ class TrainSet:
             
         self.dataset = (dataset
                         .repeat()
-                        .shuffle(buffer_size=len(files))
+                        # .shuffle(buffer_size=len(files))
                         .map(load_dataset_elements, num_parallel_calls=nthreads)
                         .map(gen_homography_fn, num_parallel_calls=nthreads)
                         .map(gen_random_params, num_parallel_calls=nthreads)

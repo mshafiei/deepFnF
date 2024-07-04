@@ -19,6 +19,7 @@ DATA_NAMES = [
 
 def load_image(filename, color_matrix, adapt_matrix):
     '''Load image and its camera matrices'''
+    tf.print(filename)
     example = {}
     ambient = tf.io.read_file(filename + '_ambient.png')
     ambient = tf.image.decode_png(ambient, channels=3, dtype=tf.uint16)
@@ -206,8 +207,6 @@ class TrainSet:
             tf.data.Dataset.from_tensor_slices(adapt_matrices)
         ))
         self.dataset = (dataset
-                        .repeat()
-                        .shuffle(buffer_size=len(files))
                         .map(load_image, num_parallel_calls=nthreads)
                         .map(gen_homography_fn, num_parallel_calls=nthreads)
                         .map(gen_random_params, num_parallel_calls=nthreads)

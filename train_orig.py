@@ -24,7 +24,7 @@ import net_ksz3
 import net
 import net_cheap as netCheap
 from net_laplacian_combine import Net as netLaplacianCombine
-# from net_llf import Net as netLLF
+from net_llf_tf2 import Net as netLLF
 from net_fft_combine import Net as netFFTCombine
 from net_flash_image import Net as netFlash
 from net_fft import Net as netFFT
@@ -43,7 +43,7 @@ import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 from lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 image_size=448
 ckpt_dir = './lpips_tf2/weights/keras'
@@ -87,8 +87,8 @@ def CreateNetwork(opts):
     
     if(opts.model == 'net_flash_image'):
         model = netFlash()
-    # elif(opts.model == 'deepfnf_llf'):
-    #     model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_llf'):
+        model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_combine_laplacian'):
         model = netLaplacianCombine(opts.sigmoid_offset, opts.sigmoid_intensity, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_combine_laplacian_pixelwise'):

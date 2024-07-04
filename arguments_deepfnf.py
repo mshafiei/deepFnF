@@ -21,6 +21,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--visualize_freq', type=int, default=10000000, help='How many iterations before visualization')
     parser.add_argument('--val_freq', type=int, default=10000000, help='How many iterations before visualization')
     parser.add_argument('--save_freq', type=int,default=100000,help='How often save parameters')
+    parser.add_argument('--use_gpu', type=str_to_bool,default=True,nargs='?', const=True,help='Use gpu')
     parser.add_argument('--mode', default='train', type=str,choices=['train','test'],help='Should we train or test the model?')
     parser.add_argument('--dump_scalars_freq', type=int, default=50, help='How many iterations before visualization')
     parser.add_argument('--displacement', type=float,default=0,help='Jitter')
