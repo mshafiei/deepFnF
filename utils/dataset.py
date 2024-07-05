@@ -19,7 +19,7 @@ DATA_NAMES = [
 
 def load_image(filename, color_matrix, adapt_matrix):
     '''Load image and its camera matrices'''
-    tf.print(filename)
+    # tf.print(filename)
     example = {}
     ambient = tf.io.read_file(filename + '_ambient.png')
     ambient = tf.image.decode_png(ambient, channels=3, dtype=tf.uint16)
