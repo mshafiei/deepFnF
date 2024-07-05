@@ -24,7 +24,6 @@ import net_ksz3
 import net
 import net_cheap as netCheap
 from net_laplacian_combine import Net as netLaplacianCombine
-from net_llf_tf2 import Net as netLLF
 from net_fft_combine import Net as netFFTCombine
 from net_flash_image import Net as netFlash
 from net_fft import Net as netFFT
@@ -88,6 +87,7 @@ def CreateNetwork(opts):
     if(opts.model == 'net_flash_image'):
         model = netFlash()
     elif(opts.model == 'deepfnf_llf'):
+        from net_llf_tf2 import Net as netLLF
         model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_combine_laplacian'):
         model = netLaplacianCombine(opts.sigmoid_offset, opts.sigmoid_intensity, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
