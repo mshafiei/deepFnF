@@ -207,6 +207,7 @@ class TrainSet:
             tf.data.Dataset.from_tensor_slices(adapt_matrices)
         ))
         self.dataset = (dataset
+                        .repeat()
                         .map(load_image, num_parallel_calls=nthreads)
                         .map(gen_homography_fn, num_parallel_calls=nthreads)
                         .map(gen_random_params, num_parallel_calls=nthreads)
