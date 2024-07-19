@@ -53,7 +53,12 @@ lpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn)
 # profiler.warmup()
 
 
-
+if(opts.use_gpu):
+    os.environ["PYTHONPATH"] = os.environ["PYTHONPATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_gpu/'
+    os.environ["PATH"] = os.environ["PATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_gpu/'
+else:
+    os.environ["PYTHONPATH"] = os.environ["PYTHONPATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_cpu/'
+    os.environ["PATH"] = os.environ["PATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_cpu/'
 
 logger = Viz.logger(opts,opts.__dict__)
 _, weight_dir = logger.path_parse('train')
@@ -277,8 +282,8 @@ with tf.device('/gpu:0'):
             # Loss
             l2_loss = tfu.l2_loss(denoise, ambient)
             gradient_loss = tfu.gradient_loss(denoise, ambient)
-            lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
-            loss = l2_loss + gradient_loss + opts.lpips * lpips_loss[0]
+            # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
+            loss = l2_loss + gradient_loss# + opts.lpips * lpips_loss[0]
 
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))

@@ -22,28 +22,28 @@ DATA_NAMES = [
 dataset_elements_ambient = []
 dataset_elements_flash = []
 
-def load_dataset_elements(ambient, flash, color_matrix, adapt_matrix):
+def load_dataset_elements(elements):
     '''Load image and its camera matrices'''
     example = {}
-    example['ambient'] = ambient
-    example['flash_only'] = flash
+    example['ambient'] = tf.cast(elements['ambient'], tf.float32) / 65535.
+    example['flash_only'] = tf.cast(elements['flash_only'], tf.float32) / 65535.
     # example['ambient'] = dataset_elements_ambient[idx].copy()
     # example['flash_only'] = dataset_elements_flash[idx].copy()
 
-    example['color_matrix'] = color_matrix
-    example['adapt_matrix'] = adapt_matrix
+    example['color_matrix'] = elements['color_matrix']
+    example['adapt_matrix'] = elements['adapt_matrix']
     return example
 
 def load_image(filename, color_matrix, adapt_matrix):
     '''Load image and its camera matrices'''
     example = {}
     ambient = tf.io.read_file(filename + '_ambient.png')
-    ambient = tf.image.decode_png(ambient, channels=3, dtype=tf.uint16)
-    example['ambient'] = tf.cast(ambient, tf.float32) / 65535.
+    example['ambient'] = tf.image.decode_png(ambient, channels=3, dtype=tf.uint16)
+    # example['ambient'] = tf.cast(ambient, tf.float32) / 65535.
 
     flash_only = tf.io.read_file(filename + '_flash.png')
-    flash_only = tf.image.decode_png(flash_only, channels=3, dtype=tf.uint16)
-    example['flash_only'] = tf.cast(flash_only, tf.float32) / 65535.
+    example['flash_only'] = tf.image.decode_png(flash_only, channels=3, dtype=tf.uint16)
+    # example['flash_only'] = tf.cast(flash_only, tf.float32) / 65535.
 
     example['color_matrix'] = color_matrix
     example['adapt_matrix'] = adapt_matrix
@@ -222,36 +222,30 @@ class TrainSet:
         #     tf.data.Dataset.from_tensor_slices(color_matrices),
         #     tf.data.Dataset.from_tensor_slices(adapt_matrices)
         # ))
-        fn = '/home/mohammad/Projects/deepfnftf2/dataset.dataset'
+        if(os.path.exists('/home/mohammad/Projects/')):
+            fn = '/home/mohammad/Projects/deepfnftf2/dataset_large.dataset'
+        else:
+            fn = '/mshvol2/users/mohammad/optimization/deepfnf_fork/dataset_large.dataset'
+
         if(os.path.exists(fn)):
             print('loading ', fn)
             dataset = tf.data.Dataset.load(fn)
-        else:
-            print('prefetching dataset')
-            for filename in tqdm.tqdm(files):
-                image_ambient = tf.io.read_file(filename + '_ambient.png')
-                image_ambient = tf.image.decode_png(image_ambient, channels=3, dtype=tf.uint16)
-                if(image_ambient.shape[0] == 1080):
-                    image_ambient = tf.transpose(image_ambient,(1,0,2))
-                
-                image_flash = tf.io.read_file(filename + '_flash.png')
-                image_flash = tf.image.decode_png(image_flash, channels=3, dtype=tf.uint16)
-                if(image_flash.shape[0] == 1080):
-                    image_flash = tf.transpose(image_flash,(1,0,2))
-                if(image_ambient.shape[0] < 1440 or image_ambient.shape[1] < 1080 or image_flash.shape[0] < 1440 or image_flash.shape[1] < 1080):
-                    print('skipping ', filename)
-                    continue
-                dataset_elements_ambient.append(tf.cast(image_flash[:1440,:1080], tf.float32) / 65535.)
-                dataset_elements_flash.append(tf.cast(image_ambient[:1440,:1080], tf.float32) / 65535.)
-            
+        else: #save on the fly
             dataset = tf.data.Dataset.zip((
-                tf.data.Dataset.from_tensor_slices(dataset_elements_ambient),
-                tf.data.Dataset.from_tensor_slices(dataset_elements_flash),
-                tf.data.Dataset.from_tensor_slices(color_matrices),
-                tf.data.Dataset.from_tensor_slices(adapt_matrices)
+            tf.data.Dataset.from_tensor_slices(files),
+            tf.data.Dataset.from_tensor_slices(color_matrices),
+            tf.data.Dataset.from_tensor_slices(adapt_matrices)
             ))
+
+            dataset = (dataset
+                .shuffle(buffer_size=len(files))
+                .map(load_image, num_parallel_calls=nthreads)
+                .prefetch(ngpus)
+                )
+
             dataset.save(fn)
-            
+        
+        print('Dataset length ', dataset.__len__())
         self.dataset = (dataset
                         .repeat()
                         # .shuffle(buffer_size=len(files))
@@ -262,6 +256,7 @@ class TrainSet:
                         .prefetch(ngpus)
                         )
         self.iterator = self.dataset
+        
 
         # self.output_types = self.dataset.output_types
         # self.output_shapes = self.dataset.output_shapes
