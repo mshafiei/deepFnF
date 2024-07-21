@@ -188,8 +188,11 @@ with tf.device('/gpu:0'):
     if(params is not None):
         niter = params['idx']
         model.weights = params['params']
+        serialized_dict = {'module':'keras.optimizers', 'class_name':'Adam', 'config':params['state']['configs'], 'registered_name':None}
+        opt = tf.keras.optimizers.deserialize(serialized_dict)
+        opt.build(list(params['params'].values()))
+        opt.set_weights(list(params['state']['variables'].values()))
         opt.from_config(params['state']['configs'])
-        opt.load_own_variables(params['state']['variables'])
         print('Successfully loaded parameters from ', params['filename'], ' for iteration ', niter)
 
     summary = '\n'.join(['%s %s' % (i, model.weights[i].shape) for i in model.weights] + ['total parameter count = %i' % np.sum([np.prod(model.weights[i].shape) for i in model.weights]) ])
@@ -346,5 +349,7 @@ with tf.device('/gpu:0'):
         # tower_grads.append(grads)
             
 # profiler.stop()
-fn1, fn2 = logger.save_params(model.weights, opt.get_config(),niter)
+store = {}
+opt.save_own_variables(store)
+fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
 print("Saving model to " + fn1 + " and " + fn2)
