@@ -7,10 +7,9 @@ import utils.tf_utils as tfu
 
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, ksz=15, burst_length=2, channels_count_factor=1):
         self.weights = {}
         self.activations = OrderedDict()
-        self.num_basis = num_basis
         self.ksz = ksz
         self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
@@ -28,7 +27,7 @@ class Net:
             w = self.weights[wnm]
         else:
             sq = np.sqrt(3.0 / np.float32(ksz[0] * ksz[1] * ksz[2]))
-            w = tf.Variable(tf.random.uniform(
+            w = tf.Variable(tf.random_uniform(
                 ksz, minval=-sq, maxval=sq, dtype=tf.float32))
             self.weights[wnm] = w
 
@@ -83,7 +82,7 @@ class Net:
         Return:
             out: output of this block
         '''
-        out = tf.image.resize(out, 2 * tf.shape(out)[1:3])
+        out = tf.image.resize_bilinear(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         out = tf.concat([out, skip], axis=-1)
@@ -109,7 +108,7 @@ class Net:
             out: output of this block
         '''
         shape = tf.shape(out)
-        out = tf.image.resize(out, 2 * shape[1:3])
+        out = tf.image.resize_bilinear(out, 2 * shape[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
 
         # resize the skip connection
@@ -124,7 +123,7 @@ class Net:
 
 
     def encode(self, out, pfx=''):
-        out = self.conv(pfx + 'inp', out, self.channel_count(64))
+        out = self.conv(pfx + 'inp', out, 64)
 
         out, d1 = self.down_block(out, self.channel_count(64  ), pfx + 'down1')
         out, d2 = self.down_block(out, self.channel_count(128 ), pfx + 'down2')
@@ -145,13 +144,12 @@ class Net:
         out = self.up_block(out, self.channel_count(64 ), d2, pfx + 'up4')
         out = self.up_block(out, self.channel_count(64 ), d1, pfx + 'up5')
 
-        out = self.conv(pfx + 'end_1', out, self.channel_count(3))
+        out = self.conv(pfx + 'end_1', out, self.channel_count(64))
         out = self.conv(pfx + 'end_2', out, self.channel_count(3), activation_name=pfx + 'end')
 
         return out
 
     def forward(self, inp):
-        '''Predict per-pixel coefficient vector given the input'''
         self.imsp = tf.shape(inp)
 
         out, skips = self.encode(inp)
