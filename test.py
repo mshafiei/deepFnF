@@ -32,7 +32,7 @@ def eval_model(model, netinput):
     return model.forward(netinput)
 
 def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval):
-    levelKey = 'Level %d' % (4 - k)
+    levelKey = 'Level %d' % (6 - k)
     npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
     data = np.load(npz_fn)
     alpha = data['alpha'][None, None, None, None].astype(np.float32)
@@ -60,7 +60,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     denoise_original = None
     laplacian_pyramid = None
     denoise_original_deepfnf = None
-    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf'):
+    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf' or logger.opts.model == 'deepfnf_llf_diffable'):
         denoise = eval_model_w_alpha(model, net_input, alpha)
         # denoise_original_deepfnf = eval_original_Deepfnf(model, net_input, alpha)[0]/alpha
         # laplacian_pyramid = eval_laplacian_interpolation(model, net_input,alpha)
@@ -137,12 +137,8 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
                 original_metrics[x] = np.array(original_metrics_pred[x])[0]
 
         metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
-    if(logger.opts.use_gpu):
-        platform = "gpu"
-    else:
-        platform = "cpu"
 
-    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'running_time_%s'%platform:running_time})
+    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'running_time':running_time})
     for key,v in metrics.items():
         if(not(key in metrics_list[levelKey].keys()) and 'spatial' not in key):
             metrics_list[levelKey][key] = []
@@ -164,7 +160,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
 
     blank = inv_kernel * 0 + 1
     cols = 5
-    if(c % 1 == 0):
+    if(c % 1 == 0 and logger.opts.no_visualize is False):
         im = {'flash':flash_wb, 'noisy':noisy_wb, 'ambient':ambient, 'denoise':denoise}
         lbl = {'flash':r'$I_{flash}$', 'noisy':r'$I_{noisy}$', 'ambient':r'$I_{ambient}$','denoise':r'$I_{ours}$'}
         if(not(denoise_original is None)):
@@ -174,7 +170,8 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
 
         im.update({'blank':blank})
         lbl.update({'blank':r'$Measurements$'})
-        annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
+        # annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
+        annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'])}
         if(laplacian_pyramid is not None):
             im.update({'laplacian_interpolation_plot':laplacian_interpolation_plot})
             lbl.update({'laplacian_interpolation_plot':'L interpolation'})
@@ -201,7 +198,11 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
                 lbl.update({'spatial_wlpips_original':r'$WLPIPS-deepfnf$'})
 
         # logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
-        logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test')
+        if(logger.opts.separate_images):
+            logger.addIndividualImages(im,lbl,'deepfnf',mode='test',annotation=annotation, idx='%03i_%03i'%(k,c))
+            # logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test')
+        else:
+            logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test',idx='%03i_%03i'%(k,c))
     logger.takeStep()
 
     mean_mtrcs = {}
@@ -235,7 +236,7 @@ def test(model, model_path, datapath,logger):
     if(k_val == None or i_val == None):
         for k in range(0, test_subsets_len):
             metrics = {}
-            levelKey = 'Level %d' % (4 - k)
+            levelKey = 'Level %d' % (6 - k)
             if(levelKey not in metrics_list.keys()):
                 metrics_list[levelKey] = {}
             startc = 0
