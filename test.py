@@ -160,7 +160,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
 
     blank = inv_kernel * 0 + 1
     cols = 5
-    if(c % 1 == 0 and logger.opts.no_visualize is False):
+    if(c % logger.opts.visualize_freq == 0 and c != 0 and logger.opts.no_visualize is False):
         im = {'flash':flash_wb, 'noisy':noisy_wb, 'ambient':ambient, 'denoise':denoise}
         lbl = {'flash':r'$I_{flash}$', 'noisy':r'$I_{noisy}$', 'ambient':r'$I_{ambient}$','denoise':r'$I_{ours}$'}
         if(not(denoise_original is None)):
