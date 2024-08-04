@@ -24,6 +24,10 @@ def eval_original_Deepfnf(model, netinput, alpha):
     return model.deepfnfDenoising(netinput, alpha)
 
 @tf.function
+def eval_original_model(model, netinput, alpha):
+    return model.forward(netinput, alpha)
+
+@tf.function
 def eval_laplacian_interpolation(model, netinput, alpha):
     return model.pyramid(netinput, alpha)
 
@@ -62,6 +66,9 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     denoise_original_deepfnf = None
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
+        denoise = model.llf(denoised, flash)
+    if(logger.opts.model == 'unet_llf'):
+        denoised, flash = eval_original_model(model, net_input, alpha)
         denoise = model.llf(denoised, flash)
     elif(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf_diffable'):
         denoise = eval_model_w_alpha(model, net_input, alpha)

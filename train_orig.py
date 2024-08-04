@@ -32,6 +32,7 @@ from net_no_scalemap import Net as NetNoScaleMap
 from net_grad import Net as NetGrad
 from net_slim import Net as NetSlim
 import unet
+import unet_llf
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
@@ -116,6 +117,8 @@ def CreateNetwork(opts):
         model = net.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf-slim'):
         model = NetSlim(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'unet_llf'):
+        model = unet_llf.Net(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'unet'):
         model = unet.Net(ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor)
     return model
