@@ -60,7 +60,10 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     denoise_original = None
     laplacian_pyramid = None
     denoise_original_deepfnf = None
-    if(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf' or logger.opts.model == 'deepfnf_llf_diffable'):
+    if(logger.opts.model == 'deepfnf_llf'):
+        denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
+        denoise = model.llf(denoised, flash)
+    elif(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf_diffable'):
         denoise = eval_model_w_alpha(model, net_input, alpha)
         # denoise_original_deepfnf = eval_original_Deepfnf(model, net_input, alpha)[0]/alpha
         # laplacian_pyramid = eval_laplacian_interpolation(model, net_input,alpha)

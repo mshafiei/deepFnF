@@ -7,6 +7,29 @@
 #pip3 install plotly pandas pdflatex opencv-python
 #sudo /root/miniconda3/etc/profile.d/conda.sh
 
+while [ $# -ge 1 ]; do
+        case "$1" in
+                --)
+                    # No more options left.
+                    shift
+                    break
+                   ;;
+                --use_gpu)
+                        use_gpu="$2"
+                        shift
+                        ;;
+        esac
+        shift
+done
+
+echo use_gpu in terminal $use_gpu
+
+if [[ $use_gpu == "False" ]]; then
+echo disabling gpu
+export CUDA_VISIBLE_DEVICES=""
+fi
+
+
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork

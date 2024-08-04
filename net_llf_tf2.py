@@ -30,25 +30,24 @@ class Net(OriginalNet):
         return denoised, flash
     
     def forward(self, inp, alpha):
-        denoised, flash = self.deepfnfDenoising(inp, alpha)
-        # if(tf.is_symbolic_tensor(denoised)):
-        #     return denoised
-        
-        # if(tf.is_symbolic_tensor(denoised)):
-        #     return denoised
-        # flash_np = np.ascontiguousarray(np.array(flash[0,...]).transpose(2,0,1))
-        # denoised_np = np.ascontiguousarray(np.array(denoised[0,...]).transpose(2,0,1))
-        # c, h, w, = flash_np.shape
-        # combined = np.empty([3, h, w], dtype=denoised_np.dtype)
-        # intensity_max = max(flash_np.max(), denoised_np.max())
-        # intensity_min = min(flash_np.min(), denoised_np.min())
-        # denoised_np = (denoised_np - intensity_min) / (intensity_max - intensity_min)
-        # flash_np = (flash_np - intensity_min) / (intensity_max - intensity_min)
-        # # guided_local_laplacian(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
-        # guided_local_laplacian_color(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
-
-        # combined = tf.convert_to_tensor(combined.transpose(1,2,0))[None,...]
-        # combined = combined * (intensity_max - intensity_min) + intensity_min
-
+        denoised, _ = self.deepfnfDenoising(inp, alpha)
         return denoised
+
     
+    def llf(self, denoised, flash):
+        flash_np = np.ascontiguousarray(np.array(flash[0,...]).squeeze().transpose(2,0,1))
+        denoised_np = np.ascontiguousarray(np.array(denoised[0,...]).squeeze().transpose(2,0,1))
+        c, h, w, = flash_np.shape
+        combined = np.empty([3, h, w], dtype=denoised_np.dtype)
+        intensity_max = max(flash_np.max(), denoised_np.max())
+        intensity_min = min(flash_np.min(), denoised_np.min())
+        denoised_np = (denoised_np - intensity_min) / (intensity_max - intensity_min)
+        flash_np = (flash_np - intensity_min) / (intensity_max - intensity_min)
+        # guided_local_laplacian(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
+        start = time.time_ns()
+        guided_local_laplacian_color(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
+        tf.print('llf_time ', (time.time_ns() - start)/1000000)
+        combined = tf.convert_to_tensor(combined.transpose(1,2,0))[None,...]
+        combined = combined * (intensity_max - intensity_min) + intensity_min
+
+        return combined
