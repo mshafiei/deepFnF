@@ -67,7 +67,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
         denoise = model.llf(denoised, flash)
-    if(logger.opts.model == 'unet_llf'):
+    elif(logger.opts.model == 'unet_llf'):
         denoised, flash = eval_original_model(model, net_input, alpha)
         denoise = model.llf(denoised, flash)
     elif(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf_diffable'):
