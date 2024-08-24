@@ -146,7 +146,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             for x in original_metrics_pred.keys():
                 original_metrics[x] = np.array(original_metrics_pred[x])[0]
 
-        metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips'],'wlpips_sq':metrics_pred['wlpips_sq']})
+        metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips'],'wlpips_abs':metrics_pred['wlpips_abs']})
 
     metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'running_time':running_time})
     for key,v in metrics.items():
@@ -181,7 +181,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         im.update({'blank':blank})
         lbl.update({'blank':r'$Measurements$'})
         # annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
-        annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f<br>WLPIPS2:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'],metrics['wlpips_sq'])}
+        annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f<br>WLPIPS1:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'],metrics['wlpips_abs'])}
         if(laplacian_pyramid is not None):
             im.update({'laplacian_interpolation_plot':laplacian_interpolation_plot})
             lbl.update({'laplacian_interpolation_plot':'L interpolation'})
@@ -237,7 +237,7 @@ def test(model, model_path, datapath,logger):
     errors = {}
     errors_dict = {}
     # logger.dumpDictJson(stats,'model_stats','train')
-    errval = Linalg.ErrEvalTF2('ssim,msssim,mse,psnr,lpips, wlpips, wlpips_sq, spatial_euclidean_distance, spatial_lpips, spatial_wlpips',image_size=448)
+    errval = Linalg.ErrEvalTF2('ssim,msssim,mse,psnr,lpips, wlpips, wlpips_abs, spatial_euclidean_distance, spatial_lpips, spatial_wlpips',image_size=448)
     metrics_list = logger.loadDictJson('test_errors_samples','test')
     if(metrics_list is None):
         metrics_list = {}
