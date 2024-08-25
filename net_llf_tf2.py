@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from guided_local_laplacian import guided_local_laplacian
 from guided_local_laplacian_color import guided_local_laplacian_color
 from net import Net as OriginalNet
 
