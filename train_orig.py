@@ -271,16 +271,10 @@ with tf.device('/gpu:0'):
 
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
-        # opt.minimize(loss, model.weights.values(), tape=tape)
         return loss
-# Saving model to logs-grid/deepfnf-0085-pixw/train/params/params_10.pickle and logs-grid/deepfnf-0085-pixw/train/params/latest_parameters.pickle with loss  0.14356029
-# dumping params  tf.Tensor(-0.050535727, shape=(), dtype=float32)
-    # dataset.iterator = dataset.iterator.repeat(10000)
 
     def training_iterate(example, niter):
-        # print('alpha ', example['alpha'])
         loss = train_step(example)
-        # logger.addScalar(loss.numpy(),'loss')
         print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy())
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -295,7 +289,6 @@ with tf.device('/gpu:0'):
             logger.addImage({'flash':flashnp.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised':denoisednp.numpy()[0], 'noisy':noisy.numpy()[0]},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise','noisy':'Noisy'},'train')
         logger.takeStep()
     
-    # fn1, fn2 = logger.save_params(model.weights, opt.get_config(),niter)
     if(opts.dataset_model == 'prefetch_nthread'):
         for i in range(int(MAXITER)):
             niter += 1
@@ -313,7 +306,6 @@ with tf.device('/gpu:0'):
             training_iterate(example, niter)
 
             
-# profiler.stop()
 store = {}
 opt.save_own_variables(store)
 fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
