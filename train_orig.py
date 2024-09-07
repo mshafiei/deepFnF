@@ -42,17 +42,15 @@ from utils.dataset_filelock import TrainSet as Trainset_filelock
 import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
+import keras
 from lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
-# tf.config.run_functions_eagerly(True)
+#tf.config.run_functions_eagerly(True)
 
 image_size=448
 ckpt_dir = './lpips_tf2/weights/keras'
 vgg_ckpt_fn = os.path.join(ckpt_dir, 'vgg', 'exported.weights.h5')
 lin_ckpt_fn = os.path.join(ckpt_dir, 'lin', 'exported.weights.h5')
 lpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn)
-
-# profiler.warmup()
-
 
 if(opts.use_gpu):
     os.environ["PYTHONPATH"] = os.environ["PYTHONPATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_gpu/'
@@ -65,12 +63,6 @@ logger = Viz.logger(opts,opts.__dict__)
 _, weight_dir = logger.path_parse('train')
 opts.weight_file = os.path.join(weight_dir,opts.weight_file)
 
-# profiler_path = os.path.join(weight_dir,'profiler')
-# if(not os.path.exists(profiler_path)):
-#     os.makedirs(profiler_path)
-# profiler.start(logdir=profiler_path)
-
-
 print("weights_dir: ",weight_dir)
 opts = logger.opts
 TLIST = opts.TLIST
@@ -79,6 +71,7 @@ BSZ = 1
 IMSZ = 448
 LR = 1e-4
 DROP = (1.1e6, 1.25e6) # Learning rate drop
+
 MAXITER = 1.5e6
 displacement = opts.displacement
 VALFREQ = opts.val_freq
@@ -123,6 +116,31 @@ def CreateNetwork(opts):
         model = unet.Net(ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor)
     return model
 
+@keras.saving.register_keras_serializable(package="LRSchedule")
+class LRSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+    def __init__(self, initial_learning_rate, drop):
+        self.initial_learning_rate =  tf.cast(initial_learning_rate,dtype=tf.float32)
+        self.drop = drop # Learning rate drop
+    
+    def __call__(self, step):
+        step = tf.cast(step,dtype=tf.float32)
+        if step < self.drop[0]:
+            return self.initial_learning_rate
+        elif step >= self.drop[0] and step < self.drop[1]:
+            return self.initial_learning_rate / np.sqrt(10.)
+        else:
+            return self.initial_learning_rate / 10.
+    def get_config(self):
+        config = {
+        'initial_learning_rate': self.initial_learning_rate.numpy(),
+        'drop': self.drop,
+        }
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(config['initial_learning_rate'], config['drop'])
+
 def load_net(fn, model):
     if(hasattr(model,'weights')):
         wts = np.load(fn)
@@ -141,13 +159,7 @@ if(opts.mode == 'test'):
     exit(0)
 else:
     model = CreateNetwork(opts)
-def get_lr(niter):
-    if niter < DROP[0]:
-        return LR
-    elif niter >= DROP[0] and niter < DROP[1]:
-        return LR / np.sqrt(10.)
-    else:
-        return LR / 10.
+
 
 #########################################################################
 
@@ -163,33 +175,12 @@ with tf.device('/cpu:0'):
                             ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     else:
         dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
-    opt = tf.keras.optimizers.Adam(learning_rate=LR)
+    opt = tf.keras.optimizers.Adam(learning_rate=LRSchedule(LR, DROP))
+    # opt = tf.keras.optimizers.Adam(learning_rate=LR)
     
 with tf.device('/gpu:0'):
     niter = 0
-    # Set up optimizer
-    # lr = tf.placeholder(shape=[], dtype=tf.float32)
-    # lr = tf.keras.Input(name="lr", shape=(), dtype=tf.dtypes.float32)
-    # opt = tf.train.AdamOptimizer(lr)
-    # opt = tf.optimizers.Adam(LR)
-    
-    # Data loading setup
 
-
-# # Calculate grads for each tower
-#     @tf.function
-#     def train_step(example):
-#         alpha = 1
-#         scale=5
-#         noisy = tf.concat([example['ambient']*scale, example['flash_only']*scale], axis=-1)
-#         net_input = tf.concat([noisy, noisy], axis=-1)
-
-#         with tf.GradientTape() as tape:
-#             denoise = model.forward(net_input,alpha)    
-#             loss = tfu.l2_loss(denoise, example['ambient']*scale)
-#         opt.minimize(loss, list(model.weights.values()), tape=tape)
-#         return loss, tfu.l2_loss(example['ambient']*scale, example['flash_only']*scale)
-#load parameters
     params = logger.load_params()
     if(params is not None):
         niter = params['idx']
@@ -260,22 +251,6 @@ with tf.device('/gpu:0'):
     @tf.function
     def train_step(example):
         net_input, alpha, _, _ = prepare_input(example)
-# 0.013875767
-        # psnr = tfu.get_psnr(denoise, ambient)
-        # if(opts.lpips):
-        #     lpips_loss = tf.reduce_mean(lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex'))
-        # else:
-        #     lpips_loss = 0
-        # if(opts.wlpips):
-        #     # wo_reduction = lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex') * tf.square(denoise - ambient)
-        #     wlpips_loss = tf.reduce_mean(lpips_tf.lpips(denoise, ambient, model='net-lin', net='alex') * tf.square(denoise - ambient))
-        # else:
-        #     wlpips_loss = 0
-        # @tf.function
-        # def loss_function(x):
-        #     denoise = x[0]
-        #     ambient = x[1]
-            # return tfu.l2_loss(denoise, ambient) + tfu.gradient_loss(denoise, ambient)
         with tf.GradientTape() as tape:
             if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_llf_diffable" or opts.model == "deepfnf_combine_laplacian_pixelwise"):
                 denoise = model.forward(net_input,alpha) / alpha
@@ -306,7 +281,7 @@ with tf.device('/gpu:0'):
         # print('alpha ', example['alpha'])
         loss = train_step(example)
         # logger.addScalar(loss.numpy(),'loss')
-        print('iter ',niter, ' loss ', loss.numpy())
+        print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy())
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
             store = {}
@@ -336,23 +311,7 @@ with tf.device('/gpu:0'):
                 break
             niter += 1
             training_iterate(example, niter)
-        # log losses
-        # visualize training
-        # visualize validation
-        # save weights
-        # ut.vprint(niter, 'loss.t', loss)
-        # logger.addScalar(loss,'loss')
-        # logger.takeStep()
-        # loss = l2_loss + gradient_loss + lpips_loss + wlpips_loss
-        # lvals = [loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss]
-        # lnms = ['loss', 'l2_pixel', 'l1_gradient', 'psnr', "lpips_loss","wlpips_loss"]
 
-        # tower_loss.append(loss)
-        # tower_lvals.append(lvals)
-
-        # grads = opt.compute_gradients(
-        #     loss_function, var_list=list())
-        # tower_grads.append(grads)
             
 # profiler.stop()
 store = {}
