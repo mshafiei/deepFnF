@@ -245,7 +245,7 @@ def test(model, model_path, datapath,logger):
     if(metrics_list is None):
         metrics_list = {}
     # startK = len(metrics_list) - 1 if len(metrics_list) > 0 else 0
-    if(logger.subset_idx != -1):
+    if(logger.opts.subset_idx != -1):
         subset_idx_start = logger.opts.subset_idx
         subset_idx_start_end = logger.opts.subset_idx+1
     else:
