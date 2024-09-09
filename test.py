@@ -35,6 +35,19 @@ def eval_laplacian_interpolation(model, netinput, alpha):
 def eval_model(model, netinput):
     return model.forward(netinput)
 
+def update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey):
+    mean_mtrcs = {}
+    for key,v in metrics_list[levelKey].items():
+        if(key == 'running_time'):
+            print('running time vector ', v)
+            mean_mtrcs[key] = '%.4f'%np.median(np.array(v))
+        else:
+            mean_mtrcs[key] = '%.4f'%np.mean(np.array(v))
+    errstr = ['%s: %s' %(key,v) for key,v in mean_mtrcs.items()]
+    errors_dict[levelKey] = mean_mtrcs
+    errors[levelKey] = ', '.join(errstr)
+    print('mean error: ', errors[levelKey])
+    
 def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval):
     levelKey = 'Level %d' % (6 - k)
     npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
@@ -70,7 +83,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     elif(logger.opts.model == 'unet_llf'):
         denoised, flash = eval_original_model(model, net_input, alpha)
         denoise = model.llf(denoised, flash)
-    elif(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf_diffable'):
+    elif(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf_diffable'or logger.opts.model == 'flash'or logger.opts.model == 'noisy'):
         denoise = eval_model_w_alpha(model, net_input, alpha)
         # denoise_original_deepfnf = eval_original_Deepfnf(model, net_input, alpha)[0]/alpha
         # laplacian_pyramid = eval_laplacian_interpolation(model, net_input,alpha)
@@ -146,8 +159,8 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             for x in original_metrics_pred.keys():
                 original_metrics[x] = np.array(original_metrics_pred[x])[0]
 
-        metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips'],'wlpips_abs':metrics_pred['wlpips_abs']})
-
+        metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
+    print('running_time1: ', running_time)
     metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'running_time':running_time})
     for key,v in metrics.items():
         if(not(key in metrics_list[levelKey].keys()) and 'spatial' not in key):
@@ -181,7 +194,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         im.update({'blank':blank})
         lbl.update({'blank':r'$Measurements$'})
         # annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
-        annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f<br>WLPIPS1:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'],metrics['wlpips_abs'])}
+        annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'])}
         if(laplacian_pyramid is not None):
             im.update({'laplacian_interpolation_plot':laplacian_interpolation_plot})
             lbl.update({'laplacian_interpolation_plot':'L interpolation'})
@@ -215,19 +228,9 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test',idx='%03i_%03i'%(k,c))
     logger.takeStep()
 
-    mean_mtrcs = {}
-    for key,v in metrics_list[levelKey].items():
-        if('key' == 'running_time'):
-            mean_mtrcs[key] = '%.4f'%np.median(np.array(v))
-        else:
-            mean_mtrcs[key] = '%.4f'%np.mean(np.array(v))
-    errstr = ['%s: %s' %(key,v) for key,v in mean_mtrcs.items()]
-    errors_dict[levelKey] = mean_mtrcs
-    errors[levelKey] = ', '.join(errstr)
-    print(errors[levelKey])
+    update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
 
 def test(model, model_path, datapath,logger):
-    print('Done\n')
     k_val = None
     i_val = None
     if(logger.opts.test_idx != -1):
@@ -255,8 +258,8 @@ def test(model, model_path, datapath,logger):
                 for i in range(startc):
                     logger.takeStep()
                     continue
-            if(startc >= 127):
-                test_idx(datapath,k,0,metrics,metrics_list,logger,model,errors_dict,errors, errval)
+            if(startc >= logger.opts.test_set_count):
+                update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
                 logger.dumpDictJson(errors_dict,'test_errors','test')
             for c in tqdm.trange(startc,logger.opts.test_set_count,1):
                 with tf.device('/gpu:0'):
