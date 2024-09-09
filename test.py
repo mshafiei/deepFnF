@@ -245,9 +245,15 @@ def test(model, model_path, datapath,logger):
     if(metrics_list is None):
         metrics_list = {}
     # startK = len(metrics_list) - 1 if len(metrics_list) > 0 else 0
-    test_subsets_len = len(os.listdir(datapath))
+    if(logger.subset_idx != -1):
+        subset_idx_start = logger.opts.subset_idx
+        subset_idx_start_end = logger.opts.subset_idx+1
+    else:
+        subset_idx_start = 0
+        subset_idx_start_end = len(os.listdir(datapath))
+
     if(k_val == None or i_val == None):
-        for k in range(0, test_subsets_len):
+        for k in range(subset_idx_start, subset_idx_start_end):
             metrics = {}
             levelKey = 'Level %d' % (6 - k)
             if(levelKey not in metrics_list.keys()):

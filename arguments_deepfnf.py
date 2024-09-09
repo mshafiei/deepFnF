@@ -53,6 +53,8 @@ def parse_arguments_deepfnf():
     parser.add_argument('--sigmoid_offset', type=float,default=0.1,help='Jitter')
     parser.add_argument('--sigmoid_intensity', type=float,default=10,help='Jitter')
     parser.add_argument('--test_set_count', type=int,default=128,help='test_set_count')
+    parser.add_argument('--subset_idx', type=int,default=-1,help='test_set_count')
+    
     
 
     parser = Viz.logger.parse_arguments(parser)
