@@ -599,7 +599,7 @@ def interpolated_laplacian(flash,denoise,x0,k,n):
     return InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
 
 def combineFNFInLaplacian(flash,denoise,x0,k,n):
-  import tensorflow_graphics.image.pyramid as tfgip
+   import tensorflow_graphics.image.pyramid as tfgip
     # laplacianflash = split(flash, n)
     # laplacianblur = split(denoise, n)
     # interpolatedLaplacian = InterpolateLaplacian(laplacianblur, laplacianflash, x0,k)
