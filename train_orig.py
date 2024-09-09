@@ -24,6 +24,7 @@ import net_ksz3
 import net
 import net_cheap as netCheap
 from net_laplacian_combine import Net as netLaplacianCombine
+from net_no_change import NetNoChange as netNoChange
 from net_fft_combine import Net as netFFTCombine
 from net_flash_image import Net as netFlash
 from net_fft import Net as netFFT
@@ -114,32 +115,16 @@ def CreateNetwork(opts):
         model = unet_llf.Net(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'unet'):
         model = unet.Net(ksz=opts.ksz, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    elif(opts.model == 'flash'):
+        model = netNoChange('flash')
+    elif(opts.model == 'noisy'):
+        model = netNoChange('noisy')
     return model
 
-@keras.saving.register_keras_serializable(package="LRSchedule")
-class LRSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
-    def __init__(self, initial_learning_rate, drop):
-        self.initial_learning_rate =  tf.cast(initial_learning_rate,dtype=tf.float32)
-        self.drop = drop # Learning rate drop
-    
-    def __call__(self, step):
-        step = tf.cast(step,dtype=tf.float32)
-        if step < self.drop[0]:
-            return self.initial_learning_rate
-        elif step >= self.drop[0] and step < self.drop[1]:
-            return self.initial_learning_rate / np.sqrt(10.)
-        else:
-            return self.initial_learning_rate / 10.
-    def get_config(self):
-        config = {
-        'initial_learning_rate': self.initial_learning_rate.numpy(),
-        'drop': self.drop,
-        }
-        return config
-    
-    @classmethod
-    def from_config(cls, config):
-        return cls(config['initial_learning_rate'], config['drop'])
+boundaries = [DROP[0], DROP[1]]
+values = [float(LR), float(LR/np.sqrt(10)), float(LR/10)]
+learning_rate_fn = keras.optimizers.schedules.PiecewiseConstantDecay(
+    boundaries, values)
 
 def load_net(fn, model):
     if(hasattr(model,'weights')):
@@ -175,7 +160,7 @@ with tf.device('/cpu:0'):
                             ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     else:
         dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
-    opt = tf.keras.optimizers.Adam(learning_rate=LRSchedule(LR, DROP))
+    opt = tf.keras.optimizers.Adam(learning_rate=learning_rate_fn)
     # opt = tf.keras.optimizers.Adam(learning_rate=LR)
     
 with tf.device('/gpu:0'):
