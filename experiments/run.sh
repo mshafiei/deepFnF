@@ -1,52 +1,12 @@
-#!/bin/bash
-#conda create -n deepfnf39 python=3.9
-#conda init
-#conda activate deepfnf39
-#python3 -m pip install tensorflow[and-cuda]
-#pip3 install natsort kaleido Jinja2 IPython pynvml h5py scikit-image clu matplotlib wandb piq
-#pip3 install plotly pandas pdflatex opencv-python
-#sudo /root/miniconda3/etc/profile.d/conda.sh
-
-while [ $# -ge 1 ]; do
-        case "$1" in
-                --)
-                    # No more options left.
-                    shift
-                    break
-                   ;;
-                --use_gpu)
-                        use_gpu="$2"
-                        shift
-                        ;;
-        esac
-        shift
-done
-
-echo use_gpu in terminal $use_gpu
-
-if [[ $use_gpu == "False" ]]; then
-echo disabling gpu
-export CUDA_VISIBLE_DEVICES=""
-fi
-
-
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
-# conda activate deepfnf
-# pip3 install scikit-image
+pip3 install imageio
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
-pip install tensorrt
-pip install --upgrade tensorflow-graphics
-#pip3 install pynvml IPython
-#pip install --upgrade "jax[cpu]"
-#pip3 install -U jax[cuda12_cudnn89] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-#pip3 install -U jaxlib[cuda12.cudnn89] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
-export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/:/mshvol2/users/mohammad/optimization/deepfnf_fork/lpips-tensorflow/
-#pip3 install pynvml
+export PYTHONPATH=`pwd`:/mshvol2/users/mohammad/cvgutils/:/mshvol2/users/mohammad/optimization/deepfnf_fork/lpips-tensorflow/:/mshvol2/users/mohammad/optimization/halide_mirror/build/python_bindings/apps
 echo command:
-echo python3 $@
-python3 $@ | tee /mshvol2/users/mohammad/optimization/deepfnf_fork/output.txt
+echo python3 $sh_params
+python3 $sh_params | tee /mshvol2/users/mohammad/optimization/deepfnf_fork/output.txt
