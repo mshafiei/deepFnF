@@ -202,7 +202,7 @@ def get_psnr(pred, gt):
     pred = tf.clip_by_value(pred, 0., 1.)
     gt = tf.clip_by_value(gt, 0., 1.)
     mse = tf.reduce_mean((pred - gt)**2.0, axis=[1, 2, 3])
-    psnr = tf.reduce_mean(-10. * tf.log(mse) / tf.log(10.))
+    psnr = tf.reduce_mean(-10. * tf.math.log(mse) / tf.math.log(10.))
     return psnr
 
 

@@ -45,7 +45,7 @@ import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
 from lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
-#tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 image_size=448
 ckpt_dir = './lpips_tf2/weights/keras'
@@ -251,15 +251,17 @@ with tf.device('/gpu:0'):
             # Loss
             l2_loss = tfu.l2_loss(denoise, ambient)
             gradient_loss = tfu.gradient_loss(denoise, ambient)
+            
             # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
             loss = l2_loss + gradient_loss# + opts.lpips * lpips_loss[0]
 
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
-        return loss
+        psnr = tfu.get_psnr(denoise,ambient)
+        return loss, psnr
 
     def training_iterate(example, niter):
-        loss = train_step(example)
+        loss, psnr = train_step(example)
         print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy())
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -268,6 +270,9 @@ with tf.device('/gpu:0'):
             fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
             print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
+        if(niter % 100 == 0 and niter != 0):
+            logger.addScalar(loss.numpy(),'loss')
+            logger.addScalar(psnr.numpy(),'psnr')
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
             denoisednp, ambientnp, flashnp, noisy = val_step(example)
