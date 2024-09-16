@@ -267,10 +267,10 @@ with tf.device('/gpu:0'):
             
             loss = l2_loss + gradient_loss
             if(opts.lpips != 0):
-                lpips_loss = opts.lpips * lpips([denoise, ambient])
+                lpips_loss = opts.lpips * lpips([denoise, ambient])[0]
                 loss += lpips_loss
             if(opts.wlpips != 0):
-                wlpips_loss = opts.wlpips * wlpips([denoise, ambient])
+                wlpips_loss = opts.wlpips * wlpips([denoise, ambient])[0]
                 loss += wlpips_loss
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
