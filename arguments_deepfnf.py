@@ -44,6 +44,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--bilateral_luma', type=float,default=16,help='number of basis')
     parser.add_argument('--bilateral_smooth', type=float,default=8,help='number of basis')
     parser.add_argument('--bilateral_neighbors', type=float,default=6,help='number of basis')
+    parser.add_argument('--deepfnf_train_path', type=str,default='',help='number of basis')
     parser.add_argument('--bs_lam', type=float,default=10,help='number of basis')
     parser.add_argument('--latexName', default="N/A", type=str,help='Latex name of the experiment')
     parser.add_argument('--model', type=str,default='deepfnf',choices=['flash','noisy','unet_llf','deepfnf_combine_laplacian_pixelwise', 'deepfnf_llf', 'deepfnf_llf_diffable','deepfnf','deepfnf_fft','unet', 'deepfnf_grad','deepfnf_combine_fft','deepfnf_combine_laplacian','net_flash_image','deepfnf-slim'],help='Neural network model')

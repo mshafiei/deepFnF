@@ -44,14 +44,25 @@ import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
-from lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
+from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
 # tf.config.run_functions_eagerly(True)
 
+# num_cores = tf.config.experimental.get_cpu_device_count()
+# tf.config.threading.set_intra_op_parallelism_threads(num_cores)
+# tf.config.threading.set_inter_op_parallelism_threads(1)
+# os.environ["OMP_NUM_THREADS"] = "1"
+# os.environ["KMP_BLOCKTIME"] = "1"
+# os.environ["KMP_SETTINGS"] = "1"
+# os.environ["KMP_AFFINITY"] = "granularity=fine,verbose,compact,1,0"
+
 image_size=448
-ckpt_dir = './lpips_tf2/weights/keras'
+local_ckpt_dir = '/home/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weights/keras'
+server_ckpt_dir = '/mshvol2/users/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weights/keras'
+ckpt_dir = local_ckpt_dir if os.path.exists(local_ckpt_dir) else server_ckpt_dir
 vgg_ckpt_fn = os.path.join(ckpt_dir, 'vgg', 'exported.weights.h5')
 lin_ckpt_fn = os.path.join(ckpt_dir, 'lin', 'exported.weights.h5')
 lpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn)
+wlpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn, 'wlpips')
 
 if(opts.use_gpu):
     os.environ["PYTHONPATH"] = os.environ["PYTHONPATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_gpu/'
@@ -236,6 +247,7 @@ with tf.device('/gpu:0'):
     @tf.function
     def train_step(example):
         net_input, alpha, _, _ = prepare_input(example)
+        lpips_loss, wlpips_loss = tf.convert_to_tensor(0), tf.convert_to_tensor(0)
         with tf.GradientTape() as tape:
             if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_llf_diffable" or opts.model == "deepfnf_combine_laplacian_pixelwise"):
                 denoise = model.forward(net_input,alpha) / alpha
@@ -252,17 +264,22 @@ with tf.device('/gpu:0'):
             l2_loss = tfu.l2_loss(denoise, ambient)
             gradient_loss = tfu.gradient_loss(denoise, ambient)
             
-            # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
-            loss = l2_loss + gradient_loss# + opts.lpips * lpips_loss[0]
-
+            
+            loss = l2_loss + gradient_loss
+            if(opts.lpips != 0):
+                lpips_loss = opts.lpips * lpips([denoise, ambient])
+                loss += lpips_loss
+            if(opts.wlpips != 0):
+                wlpips_loss = opts.wlpips * wlpips([denoise, ambient])
+                loss += wlpips_loss
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
         psnr = tfu.get_psnr(denoise,ambient)
-        return loss, psnr
+        return loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss
 
     def training_iterate(example, niter):
-        loss, psnr = train_step(example)
-        print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy())
+        loss, l2_loss, grad_loss, psnr, lpips_loss, wlpips_loss = train_step(example)
+        print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy(), ' l2_loss: ', l2_loss.numpy(), ' grad_loss: ', grad_loss.numpy(), ' psnr: ', psnr.numpy(), ' lpips_loss: ', lpips_loss.numpy(), ' wlpips_loss: ', wlpips_loss.numpy())
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
             store = {}
@@ -272,7 +289,11 @@ with tf.device('/gpu:0'):
             print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
             logger.addScalar(loss.numpy(),'loss')
+            logger.addScalar(l2_loss.numpy(),'l2_loss')
+            logger.addScalar(grad_loss.numpy(),'grad_loss')
             logger.addScalar(psnr.numpy(),'psnr')
+            logger.addScalar(lpips_loss.numpy(),'lpips')
+            logger.addScalar(wlpips_loss.numpy(),'wlpips')
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
             denoisednp, ambientnp, flashnp, noisy = val_step(example)
