@@ -44,7 +44,8 @@ import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
-from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import perceptual_model, linear_model, learned_perceptual_metric_model
+import math
+from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 # tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
@@ -61,8 +62,9 @@ server_ckpt_dir = '/mshvol2/users/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weight
 ckpt_dir = local_ckpt_dir if os.path.exists(local_ckpt_dir) else server_ckpt_dir
 vgg_ckpt_fn = os.path.join(ckpt_dir, 'vgg', 'exported.weights.h5')
 lin_ckpt_fn = os.path.join(ckpt_dir, 'lin', 'exported.weights.h5')
-lpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn)
-wlpips = learned_perceptual_metric_model(image_size, vgg_ckpt_fn, lin_ckpt_fn, 'wlpips')
+lpips_net, lpips_lin = load_perceptual_models(image_size, vgg_ckpt_fn, lin_ckpt_fn)
+lpips = learned_perceptual_metric_model(lpips_net, lpips_lin, image_size)
+wlpips = learned_perceptual_metric_model(lpips_net, lpips_lin, image_size, 'wlpips')
 
 if(opts.use_gpu):
     os.environ["PYTHONPATH"] = os.environ["PYTHONPATH"] + ':' + '/home/mohammad/Projects/Halide/python_bindings/apps_gpu/'
