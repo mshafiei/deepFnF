@@ -274,13 +274,24 @@ with tf.device('/gpu:0'):
             if(opts.wlpips != 0):
                 wlpips_loss = opts.wlpips * wlpips([denoise, ambient])[0]
                 loss += wlpips_loss
+        psnr = tfu.get_psnr(denoise,ambient)
+        if(tf.math.is_nan(loss)):
+            return loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss    
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
-        psnr = tfu.get_psnr(denoise,ambient)
         return loss, l2_loss, gradient_loss, psnr, lpips_loss, wlpips_loss
 
     def training_iterate(example, niter):
         loss, l2_loss, grad_loss, psnr, lpips_loss, wlpips_loss = train_step(example)
+        if(tf.math.is_nan(loss)):
+            print('Loss is nan. Exiting.')
+            nan_example_fn = logger.path_train + '/nan_example.pkl'
+            logger.dump_pickle(nan_example_fn, example)
+            store = {}
+            opt.save_own_variables(store)
+            fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter,'nan')
+            print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
+            exit(0)
         print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy(), ' l2_loss: ', l2_loss.numpy(), ' grad_loss: ', grad_loss.numpy(), ' psnr: ', psnr.numpy(), ' lpips_loss: ', lpips_loss.numpy(), ' wlpips_loss: ', wlpips_loss.numpy())
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -288,7 +299,6 @@ with tf.device('/gpu:0'):
             opt.save_own_variables(store)
             fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
-            print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
             logger.addScalar(loss.numpy(),'loss')
             logger.addScalar(l2_loss.numpy(),'l2_loss')
