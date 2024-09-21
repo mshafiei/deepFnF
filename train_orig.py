@@ -105,6 +105,9 @@ def CreateNetwork(opts):
     elif(opts.model == 'deepfnf_llf_diffable'):
         from net_llf_tf2_diffable import Net as netLLF
         model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_llf_local_diffable'):
+        from net_llf_tf2_local_alpha_diffable import Net as netLLFLocalAlpha
+        model = netLLFLocalAlpha(opts.alpha_width, opts.alpha_height, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_combine_laplacian'):
         model = netLaplacianCombine(opts.sigmoid_offset, opts.sigmoid_intensity, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_combine_laplacian_pixelwise'):
@@ -251,7 +254,7 @@ with tf.device('/gpu:0'):
         net_input, alpha, _, _ = prepare_input(example)
         lpips_loss, wlpips_loss = tf.convert_to_tensor(0), tf.convert_to_tensor(0)
         with tf.GradientTape() as tape:
-            if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_llf_diffable" or opts.model == "deepfnf_combine_laplacian_pixelwise"):
+            if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_llf_diffable" or opts.model == "deepfnf_combine_laplacian_pixelwise" or opts.model == "deepfnf_llf_local_diffable"):
                 denoise = model.forward(net_input,alpha) / alpha
             else:
                 denoise = model.forward(net_input) / alpha
