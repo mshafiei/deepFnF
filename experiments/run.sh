@@ -1,6 +1,7 @@
 #!/bin/bash
 . "/miniconda3/etc/profile.d/conda.sh"
 conda activate deepfnf
+wandb artifact cache cleanup 1GB
 sh_params=$@
 echo executing run.sh with arguments: $sh_params
 
