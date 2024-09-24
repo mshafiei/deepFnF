@@ -346,7 +346,7 @@ with tf.device('/gpu:0'):
             break
         niter += 1
         if(opts.overfit):
-            for _ in range(MAXITER):
+            for _ in range(int(MAXITER)):
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
         else:
             # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
