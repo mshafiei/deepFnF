@@ -311,7 +311,7 @@ with tf.device('/gpu:0'):
             logger.addScalar(psnr_deepfnf.numpy(),'psnr_deepfnf')
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
-            gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient)
+            gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
             psnr_deepfnf = tfu.get_psnr(denoisednp, ambientnp)
             logger.addImage({'flash':flashnp.numpy()[0], 'noisy':noisy.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised_deepfnf':denoisednp.numpy()[0], 'denoised_gllf':gllf.numpy()[0]},{'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF'},'train')
         logger.takeStep()
