@@ -22,7 +22,7 @@ def call_llf(flash, denoised, alpha, levels, beta):
     # flash_np = (flash_np - intensity_min) / (intensity_max - intensity_min)
     start = time.time_ns()
     guided_local_laplacian_color(flash_np, denoised_np, levels, alpha, beta, combined)
-    tf.print('llf_time ', (time.time_ns() - start)/1000000)
+    # tf.print('llf_time ', (time.time_ns() - start)/1000000)
     combined = combined.transpose(1,2,0)[None,...]
     # combined = combined * (intensity_max - intensity_min) + intensity_min
     return combined
@@ -39,7 +39,7 @@ def call_dllf(flash, denoised, alpha, levels, beta):
     # flash_np = (flash_np - intensity_min) / (intensity_max - intensity_min)
     start = time.time_ns()
     guided_local_laplacian_color_grad(flash_np, denoised_np, levels, alpha, beta, deriv)
-    tf.print('dllf_time ', (time.time_ns() - start)/1000000)
+    # tf.print('dllf_time ', (time.time_ns() - start)/1000000)
     deriv = deriv.transpose(1,2,0)[None,...]
     # deriv = deriv * (intensity_max - intensity_min) + intensity_min
     return deriv

@@ -45,7 +45,7 @@ class Net(OriginalNet):
         # guided_local_laplacian(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
         start = time.time_ns()
         guided_local_laplacian_color(flash_np, denoised_np, self.levels, self.alpha / (self.levels - 1), self.beta, combined)
-        tf.print('llf_time ', (time.time_ns() - start)/1000000)
+        # tf.print('llf_time ', (time.time_ns() - start)/1000000)
         combined = tf.convert_to_tensor(combined.transpose(1,2,0))[None,...]
         combined = combined * (intensity_max - intensity_min) + intensity_min
 
