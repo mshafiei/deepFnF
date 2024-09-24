@@ -118,7 +118,7 @@ def get_gradient(imgs):
 import tensorflow as tf
 
 
-def split_image_into_blocks(image, image_height, image_width, num_blocks_h, num_blocks_w, block_size_h, block_size_w, n_channels=3):
+def split_image_into_blocks(image, image_height, image_width, num_blocks_h, num_blocks_w, block_size_h, block_size_w, pad_y, pad_x, n_channels=3):
     """
     Splits an image into blocks with symmetrical zero padding.
     
@@ -134,14 +134,13 @@ def split_image_into_blocks(image, image_height, image_width, num_blocks_h, num_
     """
 
     # Calculate the required padding for height and width to fit into the specified blocks
-    total_pad_h = max(0, num_blocks_h * block_size_h - image_height)
-    total_pad_w = max(0, num_blocks_w * block_size_w - image_width)
-
+    assert image_height % block_size_h == 0
+    assert image_width % block_size_w == 0
     # Calculate top, bottom, left, and right padding
-    pad_top = total_pad_h // 2
-    pad_bottom = total_pad_h - pad_top
-    pad_left = total_pad_w // 2
-    pad_right = total_pad_w - pad_left
+    pad_top = pad_y
+    pad_bottom = pad_y
+    pad_left = pad_x
+    pad_right = pad_x
 
     # Pad the image with zeros (top, bottom, left, right)
     padded_image = tf.pad(image, [[0, 0], [pad_top, pad_bottom], [pad_left, pad_right], [0, 0]])
@@ -150,7 +149,7 @@ def split_image_into_blocks(image, image_height, image_width, num_blocks_h, num_
     blocks = tf.image.extract_patches(
         images=padded_image,
         sizes=[1, block_size_h, block_size_w, 1],
-        strides=[1, block_size_h, block_size_w, 1],
+        strides=[1, block_size_h//2, block_size_w//2, 1],
         rates=[1, 1, 1, 1],
         padding='VALID'
     )
