@@ -345,8 +345,12 @@ with tf.device('/gpu:0'):
         if(niter > MAXITER):
             break
         niter += 1
-        # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
-        training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
+        if(opts.overfit):
+            for _ in range(MAXITER):
+                training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
+        else:
+            # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
+            training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
 
     #synthetic test case
     # flash = np.ones([1,448,448,3],dtype=np.float32)

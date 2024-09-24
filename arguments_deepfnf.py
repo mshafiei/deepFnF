@@ -52,6 +52,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf_llf_scalar_alpha','deepfnf_llf_scalar_alpha_encoder','deepfnf_llf_alpha_map_unet', 'deepfnf_llf_alpha_map_image', 'flash','noisy','unet_llf','deepfnf_combine_laplacian_pixelwise', 'deepfnf_llf', 'deepfnf_llf_diffable','deepfnf','deepfnf_fft','unet', 'deepfnf_grad','deepfnf_combine_fft','deepfnf_combine_laplacian','net_flash_image','deepfnf-slim'],help='Neural network model')
     parser.add_argument('--scalemap', type=str_to_bool,default=True,nargs='?', const=True,help='Use scalemap?')
     parser.add_argument('--separate_images', type=str_to_bool,default=False,nargs='?', const=True,help='export images separately or all together')
+    parser.add_argument('--overfit', type=str_to_bool,default=False,nargs='?', const=True,help='export images separately or all together')
     parser.add_argument('--dataset_model', type=str, default='default', choices=['default','filelock','prefetch','prefetch_nthread'], help='Validation dataset')
     parser.add_argument('--sigmoid_offset', type=float,default=0.1,help='Jitter')
     parser.add_argument('--sigmoid_intensity', type=float,default=10,help='Jitter')
