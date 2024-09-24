@@ -240,8 +240,8 @@ with tf.device('/gpu:0'):
         return net_input, alpha, noisy_flash, noisy_ambient
 
     @tf.function
-    def val_step(net_input, alpha, noisy_flash, noisy_ambient):
-        denoise = deepfnf_model.forward(net_input)
+    def val_step(net_input, alpha, noisy_flash, noisy_ambient, example):
+        denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
         
         noisy_ambient_scaled = tfu.camera_to_rgb(
             noisy_ambient / alpha, example['color_matrix'], example['adapt_matrix'])
@@ -264,9 +264,8 @@ with tf.device('/gpu:0'):
         
 
     @tf.function
-    def train_step(net_input, alpha, noisy_flash, noisy_ambient):
-        denoise = deepfnf_model.forward(net_input)
-        
+    def train_step(net_input, alpha, noisy_flash, noisy_ambient, example):
+        denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
         deepfnf_scaled = tfu.camera_to_rgb(
             denoise / alpha, example['color_matrix'], example['adapt_matrix'])
         
@@ -294,8 +293,9 @@ with tf.device('/gpu:0'):
         psnr_deepfnf = tfu.get_psnr(deepfnf_scaled, ambient_scaled)
         return loss, psnr_gllf, psnr_deepfnf, l2_loss, gradient_loss
 
-    def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter):
-        loss, psnr_gllf, psnr_deepfnf, l2_loss, gradient_loss= train_step(net_input, alpha, noisy_flash, noisy_ambient)
+    def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
+        
+        loss, psnr_gllf, psnr_deepfnf, l2_loss, gradient_loss= train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
         print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy(), ' l2_loss ',l2_loss.numpy(), ' gradient_loss ',gradient_loss.numpy(), ' psnr_gllf: ', psnr_gllf.numpy(), ' psnr_deepfnf: ', psnr_deepfnf.numpy())
         
         # Save model weights if needed
@@ -347,10 +347,10 @@ with tf.device('/gpu:0'):
         niter += 1
         if(opts.overfit):
             for _ in range(int(MAXITER)):
-                training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
+                training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example)
         else:
             # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
-            training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
+            training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example)
 
     #synthetic test case
     # flash = np.ones([1,448,448,3],dtype=np.float32)
