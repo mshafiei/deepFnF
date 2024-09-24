@@ -342,12 +342,11 @@ with tf.device('/gpu:0'):
     
     for example in dataset.iterator:
         net_input, alpha, noisy_flash, noisy_ambient = prepare_input(example)
-        for _ in range(10000):
-            if(niter > MAXITER):
-                break
-            niter += 1
-            # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
-            training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
+        if(niter > MAXITER):
+            break
+        niter += 1
+        # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
+        training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter)
 
     #synthetic test case
     # flash = np.ones([1,448,448,3],dtype=np.float32)
