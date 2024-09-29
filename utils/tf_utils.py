@@ -144,7 +144,7 @@ def split_image_into_blocks(image, image_height, image_width, num_blocks_h, num_
 
     # Pad the image with zeros (top, bottom, left, right)
     padded_image = tf.pad(image, [[0, 0], [pad_top, pad_bottom], [pad_left, pad_right], [0, 0]])
-
+    
     # Extract blocks from the padded image
     blocks = tf.image.extract_patches(
         images=padded_image,
@@ -152,6 +152,48 @@ def split_image_into_blocks(image, image_height, image_width, num_blocks_h, num_
         strides=[1, block_size_h//2, block_size_w//2, 1],
         rates=[1, 1, 1, 1],
         padding='VALID'
+     )
+
+    # Reshape the patches to [num_blocks_h, num_blocks_w, block_size_h, block_size_w, channels]
+    blocks_reshaped = tf.reshape(blocks, [num_blocks_h, num_blocks_w, block_size_h, block_size_w, n_channels])
+
+    return blocks_reshaped
+
+
+def split_image_into_blocks_v2(image, image_height, image_width, stride_y, stride_x, num_blocks_h, num_blocks_w, block_size_h, block_size_w, pad_y, pad_x, n_channels=3):
+    """
+    Splits an image into blocks with symmetrical zero padding.
+    
+    Parameters:
+    - image: 4D Tensor of shape [1, height, width, channels] (e.g., a single image tensor).
+    - num_blocks_h: The number of blocks along the height (vertical axis).
+    - num_blocks_w: The number of blocks along the width (horizontal axis).
+    - block_size_h: The height of each block.
+    - block_size_w: The width of each block.
+    
+    Returns:
+    - blocks_reshaped: Tensor of shape [num_blocks_h, num_blocks_w, block_size_h, block_size_w, channels].
+    """
+
+    # Calculate the required padding for height and width to fit into the specified blocks
+    assert image_height % block_size_h == 0
+    assert image_width % block_size_w == 0
+    # Calculate top, bottom, left, and right padding
+    pad_top = pad_y
+    pad_bottom = pad_y
+    pad_left = pad_x
+    pad_right = pad_x
+
+    # Pad the image with zeros (top, bottom, left, right)
+    padded_image = tf.pad(image, [[0, 0], [pad_top, pad_bottom], [pad_left, pad_right], [0, 0]])
+    
+    # Extract blocks from the padded image
+    blocks = tf.image.extract_patches(
+        images=image,
+        sizes=[1, block_size_h, block_size_w, 1],
+        strides=[1, stride_y, stride_x, 1],
+        rates=[1, 1, 1, 1],
+        padding='SAME'
     )
 
     # Reshape the patches to [num_blocks_h, num_blocks_w, block_size_h, block_size_w, channels]

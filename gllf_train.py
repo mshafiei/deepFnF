@@ -33,7 +33,7 @@ import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -151,7 +151,16 @@ with tf.device('/gpu:0'):
     
     @tf.function
     def gradient_validation(net_input, alpha, noisy_flash, noisy_ambient):
-        eps = 1e-4
+        def loss_eval(model, gt, net_ft_input, noisy_flash_scaled, deepfnf_scaled):
+            gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+            # Loss
+            l2_loss = tfu.l2_loss(gllf_scaled, gt)
+            gradient_loss = tfu.gradient_loss(gllf_scaled, noisy_flash_scaled)
+            
+            # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
+            loss = l2_loss + gradient_loss# + opts.lpips * lpips_loss[0]
+            return loss
+        eps = 1e-3 #choose larger values for larger alpha map
         denoise = deepfnf_model.forward(net_input)
         
         deepfnf_scaled = tfu.camera_to_rgb(
@@ -167,13 +176,7 @@ with tf.device('/gpu:0'):
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
         
         with tf.GradientTape() as tape:
-            gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
-            # Loss
-            l2_loss = tfu.l2_loss(gllf_scaled, ambient_scaled)
-            # gradient_loss = tfu.gradient_loss(gllf_scaled, ambient_scaled)
-            
-            # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
-            loss = l2_loss # + gradient_loss# + opts.lpips * lpips_loss[0]
+            loss = loss_eval(model, noisy_flash_scaled, net_ft_input, noisy_flash_scaled, deepfnf_scaled)
         gradients = tape.gradient(loss, model.weights.values())
 
         fd = {}
@@ -189,25 +192,23 @@ with tf.device('/gpu:0'):
                 # values = tf.identity(model.weights[k])
                 flat[i].assign(w_val - eps)
                 model.weights[k] = tf.reshape(flat,orig_shape)
-                gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
-                l2_loss = tfu.l2_loss(gllf_scaled, ambient_scaled)
-                # gradient_loss = tfu.gradient_loss(gllf_scaled, ambient_scaled)
-                loss_n = l2_loss #+ gradient_loss
+                loss_n = loss_eval(model, noisy_flash_scaled, net_ft_input, noisy_flash_scaled, deepfnf_scaled)
                 
                 flat[i].assign(w_val + eps)
                 model.weights[k] = tf.reshape(flat,orig_shape)
-                gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
-                l2_loss = tfu.l2_loss(gllf_scaled, ambient_scaled)
-                # gradient_loss = tfu.gradient_loss(gllf_scaled, ambient_scaled)
-                loss_p = l2_loss #+ gradient_loss
+                loss_p = loss_eval(model, noisy_flash_scaled, net_ft_input, noisy_flash_scaled, deepfnf_scaled)
 
                 fd_tensor[i].assign((loss_p - loss_n) / (2*eps))
                 flat[i].assign(w_val)
                 model.weights[k] = tf.reshape(flat, orig_shape)
-                assert tf.abs(grad_flat[i] - fd_tensor[i]) < 1e-4
+                err = tf.abs(grad_flat[i] - fd_tensor[i])
+                print(i,'/',flat.shape[0],' err: ', err)
+                
 
             fd[k] = tf.reshape(fd_tensor, orig_shape)
-            fd_grad_diff[k] = gradients[k] - fd[k]
+            fd_grad_diff[k] = tf.reduce_mean(tf.abs(gradients - fd[k]) / (tf.abs(fd[k])+0.0001))
+            print('relative error: ',fd_grad_diff[k].numpy())
+            # fd_grad_diff[k] = gradients - fd[k]
         print('hi')
         
         
