@@ -124,7 +124,10 @@ class Net(OriginalNet):
             #         cv2.imwrite('./deriv_out/upstream_%i_%i.exr'%(i, j), np.abs(blocks[i,j,:,:,:].numpy().transpose(1,2,0)))
             #         cv2.imwrite('./deriv_out/dllf_%i_%i.exr'%(i, j), np.abs(dllf_output[i,j,:,:,:].numpy().transpose(1,2,0)))
             alpha_grad = tf.reduce_sum(blocks * dllf_output,axis=(2,3,4))
-            return (upstream, upstream, alpha_grad[self.alpha_res_h:-self.alpha_res_h,self.alpha_res_w:-self.alpha_res_w])
+            if(self.alpha_res_h == 0 or self.alpha_res_w == 0):
+                return (upstream, upstream, alpha_grad)
+            else:
+                return (upstream, upstream, alpha_grad[self.alpha_res_h:-self.alpha_res_h,self.alpha_res_w:-self.alpha_res_w])
         llf_output = llf_output[:,self.image_res_h:-self.image_res_h,self.image_res_w:-self.image_res_w]
         return tf.transpose(llf_output[None,...],(0,2,3,1)), grad_fn
 
