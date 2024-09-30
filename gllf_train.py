@@ -312,7 +312,7 @@ with tf.device('/gpu:0'):
             opt.save_own_variables(store)
             fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
-            print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
+            # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
             logger.addScalar(loss.numpy(),'loss')
             logger.addScalar(psnr_gllf.numpy(),'psnr_gllf')
