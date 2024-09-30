@@ -14,6 +14,7 @@ from bilateral import bilateralFilter, bilateralSolve
 from BilateralParallel import bilateral_rgb
 import cvgutils.Linalg as Linalg
 import cvgutils.Viz as viz
+from timeit import default_timer as timer
 
 @tf.function
 def eval_model_w_alpha(model, netinput, alpha):
@@ -73,10 +74,11 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         noisy, data['sig_read'], data['sig_shot'])
     net_input = tf.concat([noisy, noise_std], axis=-1)
     
-    start = time.time_ns()
+    
     denoise_original = None
     laplacian_pyramid = None
     denoise_original_deepfnf = None
+    start = timer()
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
         denoise = model.llf(denoised, flash)
@@ -90,19 +92,29 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     elif(logger.opts.model == 'deepfnf_combine_laplacian_pixelwise'):
         denoise = eval_model_w_alpha(model, net_input, data['alpha'])
         laplacianWeights = model.getLaplacianWeights()
+    elif(logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2'):
+        # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
+        denoised = model.deepfnf_model.forward(net_input)
+        deepfnf_scaled = tfu.camera_to_rgb(
+            denoised / tf.squeeze(alpha), data['color_matrix'], data['adapt_matrix'])
+        noisy_flash_scaled = tfu.camera_to_rgb(
+            noisy_flash, data['color_matrix'], data['adapt_matrix'])
+        net_ft_input = tf.concat((net_input, denoised), axis=-1)
+        denoise = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
     else:
         denoise = eval_model(model, net_input)
-
-    end = time.time_ns()
-    running_time = (end - start)/1000000
+    end = timer()
+    running_time = int((end - start)*1000)
     print('forward pass takes ', running_time, 'ms')
 
-    denoise = denoise / alpha
+    
     # denoise = noisy_flash
     ambient = tfu.camera_to_rgb(
         ambient, data['color_matrix'], data['adapt_matrix'])
-    denoise = tfu.camera_to_rgb(
-        denoise, data['color_matrix'], data['adapt_matrix'])
+    if(logger.opts.model != 'deepfnf_llf_alpha_map_unet' and logger.opts.model != 'deepfnf_llf_alpha_map_unet_v2'):
+        denoise = denoise / alpha
+        denoise = tfu.camera_to_rgb(
+            denoise, data['color_matrix'], data['adapt_matrix'])
     noisy_wb = tfu.camera_to_rgb(
         noisy_ambient/alpha, data['color_matrix'], data['adapt_matrix'])
     flash_wb = tfu.camera_to_rgb(

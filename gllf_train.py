@@ -33,7 +33,7 @@ import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -91,9 +91,16 @@ def load_net(fn, model):
 
 if(opts.mode == 'test'):
     model, deepfnf_model = net_utils.CreateNetwork(opts)
+    deepfnf_params = logger.load_params(opts.deepfnf_train_path)
+    if(deepfnf_params != None):
+        deepfnf_model.weights = deepfnf_params['params']
+    else:
+        print('cannot load deepfnf parameters ', opts.deepfnf_train_path)
+        exit(0)
     params = logger.load_params()
     if (params is not None) and ('params' in params.keys()):
         model.weights = params['params']
+    model.deepfnf_model = deepfnf_model
     test(model, opts.weight_file, opts.TESTPATH,logger)
     exit(0)
 else:
