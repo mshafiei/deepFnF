@@ -29,6 +29,8 @@ def parse_arguments_deepfnf():
     parser.add_argument('--max_scale', type=float,default=1.0,help='Jitter')
     parser.add_argument('--max_rotate', type=float,default=0.,help='Jitter')
     parser.add_argument('--lmbda', type=float,default=1,help='Maximum lambda for initialization')
+    parser.add_argument('--l2', type=float,default=0.,help='lpips loss')
+    parser.add_argument('--grad', type=float,default=0.,help='lpips loss')
     parser.add_argument('--lpips', type=float,default=0.,help='lpips loss')
     parser.add_argument('--wlpips', type=float,default=0.,help='wlpips loss')
     parser.add_argument('--ksz', type=int, default=15, help='size of kernel')
