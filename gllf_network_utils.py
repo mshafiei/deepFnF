@@ -25,6 +25,9 @@ def CreateNetwork(opts):
     elif(opts.model == 'deepfnf_llf_scalar_alpha'):
         from net_llf_tf2_diffable_scalar import Net as net_unet
         model = net_unet(llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'deepfnf_refine_unet'):
+        from net_deepfnf_unet_refinement import Net as deepfnf_refine_net
+        model = deepfnf_refine_net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
 
     import net
     deepfnf_model = net.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)

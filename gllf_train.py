@@ -159,10 +159,10 @@ with tf.device('/gpu:0'):
     @tf.function
     def gradient_validation(net_input, alpha, noisy_flash, noisy_ambient):
         def loss_eval(model, gt, net_ft_input, noisy_flash_scaled, deepfnf_scaled):
-            gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+            refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
             # Loss
-            l2_loss = tfu.l2_loss(gllf_scaled, gt)
-            gradient_loss = tfu.gradient_loss(gllf_scaled, noisy_flash_scaled)
+            l2_loss = tfu.l2_loss(refined_scaled, gt)
+            gradient_loss = tfu.gradient_loss(refined_scaled, noisy_flash_scaled)
             
             # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
             loss = l2_loss + gradient_loss# + opts.lpips * lpips_loss[0]
@@ -266,9 +266,9 @@ with tf.device('/gpu:0'):
         
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
         
-        gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, denoise_scaled)
+        refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, denoise_scaled)
 
-        return gllf_scaled, denoise_scaled, ambient_scaled, noisy_flash_scaled, noisy_ambient_scaled
+        return refined_scaled, denoise_scaled, ambient_scaled, noisy_flash_scaled, noisy_ambient_scaled
         
 
     @tf.function
@@ -286,25 +286,25 @@ with tf.device('/gpu:0'):
         
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
         with tf.GradientTape() as tape:
-            gllf_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+            refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
 
             # Loss
-            l2_loss = tfu.l2_loss(gllf_scaled, ambient_scaled)
-            gradient_loss = tfu.gradient_loss(gllf_scaled, ambient_scaled)
+            l2_loss = tfu.l2_loss(refined_scaled, ambient_scaled)
+            gradient_loss = tfu.gradient_loss(refined_scaled, ambient_scaled)
             
             # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
             loss = l2_loss + gradient_loss# + opts.lpips * lpips_loss[0]
 
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
-        psnr_gllf = tfu.get_psnr(gllf_scaled, ambient_scaled)
+        psnr_refined = tfu.get_psnr(refined_scaled, ambient_scaled)
         psnr_deepfnf = tfu.get_psnr(deepfnf_scaled, ambient_scaled)
-        return loss, psnr_gllf, psnr_deepfnf, l2_loss, gradient_loss
+        return loss, psnr_refined, psnr_deepfnf, l2_loss, gradient_loss
 
     def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
         
-        loss, psnr_gllf, psnr_deepfnf, l2_loss, gradient_loss= train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
-        print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy(), ' l2_loss ',l2_loss.numpy(), ' gradient_loss ',gradient_loss.numpy(), ' psnr_gllf: ', psnr_gllf.numpy(), ' psnr_deepfnf: ', psnr_deepfnf.numpy())
+        loss, psnr_refined, psnr_deepfnf, l2_loss, gradient_loss= train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
+        print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, ' loss: ', loss.numpy(), ' l2_loss ',l2_loss.numpy(), ' gradient_loss ',gradient_loss.numpy(), ' psnr_refined: ', psnr_refined.numpy(), ' psnr_deepfnf: ', psnr_deepfnf.numpy())
         
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -315,7 +315,7 @@ with tf.device('/gpu:0'):
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
             logger.addScalar(loss.numpy(),'loss')
-            logger.addScalar(psnr_gllf.numpy(),'psnr_gllf')
+            logger.addScalar(psnr_refined.numpy(),'psnr_refined')
             logger.addScalar(psnr_deepfnf.numpy(),'psnr_deepfnf')
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
