@@ -319,7 +319,7 @@ with tf.device('/gpu:0'):
     def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
         
         losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
-        losses_str = ', '.join(['%s:%.04f' % (k,v) for k, v in losses.items()])
+        losses_str = ', '.join(['%s:%.05f' % (k,v) for k, v in losses.items()])
         print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str)
         loss = losses['loss']
         
