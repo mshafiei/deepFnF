@@ -323,7 +323,7 @@ with tf.device('/gpu:0'):
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
             [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
-        if VALFREQ > 0 and niter % VALFREQ == 0:
+        if VALFREQ > 0:
             # draw example['ambient'], denoised image, flash image, absolute error
             gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
             psnr_deepfnf = tfu.get_psnr(denoisednp, ambientnp)
@@ -360,6 +360,12 @@ with tf.device('/gpu:0'):
             break
         niter += 1
         if(opts.overfit):
+            #if example does not exist, save it, otherwise load it
+            overfit_example_fn = './overfit_example.pkl'
+            if(os.path.exists(overfit_example_fn)):
+                example = logger.load_pickle(overfit_example_fn)
+            else:
+                logger.dump_pickle(overfit_example_fn, example)
             for _ in range(int(MAXITER)):
                 niter += 1
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example)
