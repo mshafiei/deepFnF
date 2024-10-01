@@ -323,7 +323,7 @@ with tf.device('/gpu:0'):
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
             [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
-        if VALFREQ > 0:
+        if niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
             gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
             psnr_deepfnf = tfu.get_psnr(denoisednp, ambientnp)
