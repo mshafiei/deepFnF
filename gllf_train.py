@@ -322,9 +322,7 @@ with tf.device('/gpu:0'):
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",float(losses['loss'].numpy()))
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
-            logger.addScalar(loss.numpy(),'loss')
-            logger.addScalar(psnr_refined.numpy(),'psnr_refined')
-            logger.addScalar(psnr_deepfnf.numpy(),'psnr_deepfnf')
+            [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
             gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
