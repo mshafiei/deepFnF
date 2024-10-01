@@ -354,8 +354,8 @@ with tf.device('/gpu:0'):
         return loss
 
     
-    for example in dataset.iterator:
-        net_input, alpha, noisy_flash, noisy_ambient = prepare_input(example)
+    for data in dataset.iterator:
+        net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data)
         if(niter > MAXITER):
             break
         niter += 1
@@ -363,15 +363,15 @@ with tf.device('/gpu:0'):
             #if example does not exist, save it, otherwise load it
             overfit_example_fn = './overfit_example.pkl'
             if(os.path.exists(overfit_example_fn)):
-                example = logger.load_pickle(overfit_example_fn)
+                data = logger.load_pickle(overfit_example_fn)
             else:
-                logger.dump_pickle(overfit_example_fn, example)
+                logger.dump_pickle(overfit_example_fn, data)
             for _ in range(int(MAXITER)):
                 niter += 1
-                training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example)
+                training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data)
         else:
             # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
-            training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example)
+            training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data)
 
     #synthetic test case
     # flash = np.ones([1,448,448,3],dtype=np.float32)
