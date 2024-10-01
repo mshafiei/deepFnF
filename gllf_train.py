@@ -300,12 +300,11 @@ with tf.device('/gpu:0'):
                 loss += gradient_loss# + opts.lpips * lpips_loss[0]
                 losses.update({'grad':float(gradient_loss.numpy())})
             if(opts.lpips != 0.0):
-                lpips_loss = tf.stop_gradient(lpips([refined_scaled, ambient_scaled]))
+                lpips_loss = lpips([refined_scaled, ambient_scaled])
                 loss += lpips_loss
-                losses.update({'lpips':float(l2_loss.numpy())})
+                losses.update({'lpips':float(lpips_loss.numpy())})
             if(opts.wlpips != 0.0):
-                wlpips_loss = tf.stop_gradient(wlpips([refined_scaled, ambient_scaled]))
-                wlpips_loss = tf.stop_gradient(lpips([refined_scaled, ambient_scaled]))
+                wlpips_loss = wlpips([refined_scaled, ambient_scaled])
                 loss += wlpips_loss
                 losses.update({'wlpips':float(wlpips_loss.numpy())})
             
