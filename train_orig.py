@@ -254,7 +254,7 @@ with tf.device('/gpu:0'):
         net_input, alpha, _, _ = prepare_input(example)
         lpips_loss, wlpips_loss = tf.convert_to_tensor(0), tf.convert_to_tensor(0)
         with tf.GradientTape() as tape:
-            if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_llf_diffable" or opts.model == "deepfnf_combine_laplacian_pixelwise" or opts.model == "deepfnf_llf_local_diffable"):
+            if(opts.model == "deepfnf_llf" or opts.model == "deepfnf_llf_diffable" or opts.model == "deepfnf_combine_laplacian_pixelwise" or opts.model == "deepfnf_llf_overfit"):
                 denoise = model.forward(net_input,alpha) / alpha
             else:
                 denoise = model.forward(net_input) / alpha

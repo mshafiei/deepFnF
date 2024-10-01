@@ -13,9 +13,11 @@ from utils.dataset import Dataset
 import utils.tf_utils as tfu
 import utils.utils as ut
 import cvgutils.Viz as Viz
+import tqdm
 
 TLIST = opts.TLIST
 VPATH = opts.VPATH
+dataset_len=124
 BSZ = 1
 IMSZ = 448
 LR = 1e-4
@@ -48,19 +50,28 @@ logger = Viz.logger(opts,opts.__dict__)
 # with open(valfn, 'w') as fd:
 #     fd.writelines(fullfns)
 
-dr_testset = '/home/mohammad/Projects/DifferentiableSolver/data/testsets_nojitter_extreme_noise'
+dr_testset = '/home/mohammad/Projects/DifferentiableSolver/data/testsets_nojitter_little_noise'
 #generate the validation set
 #read from the dataset
 # example = dataset.get_next()
+with open(VPATH,'r') as fd:
+    lines = fd.readlines()
+    train_samples = [l.replace('\n','') for l in lines]
 
-alphas = [0.001,0.002,0.004,0.01,0.02,.04,0.08]
+local = True
+alphas = [0.75,0.8, 0.85,0.9,0.95,1]
 for i, alpha in enumerate(alphas):
-    dataset = TrainSet_prefetch(VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
+    if(local):
+        dataset = Dataset(VPATH, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
+    else:
+        dataset = TrainSet_prefetch(VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     testset_dir = os.path.join(dr_testset,str(i))
     if(not os.path.exists(testset_dir)):
         os.makedirs(testset_dir)
     for j, example in enumerate(dataset.iterator):
-        if(j == dataset.length):
+        if(local and j == dataset_len):
+            break
+        elif(not local and j == dataset.length):
             break
     # for j in range(length):
         # example = dataset.get_next()

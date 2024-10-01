@@ -32,8 +32,9 @@ import cvgutils.Viz as Viz
 import time
 from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
+from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -285,42 +286,33 @@ with tf.device('/gpu:0'):
             example['color_matrix'], example['adapt_matrix'])
         
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
-        losses = {}
         with tf.GradientTape() as tape:
             refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
 
             # Loss
-            loss = 0
-            if(opts.l2 != 0.0):
-                l2_loss = tfu.l2_loss(refined_scaled, ambient_scaled)
-                loss += l2_loss
-                losses.update({'l2':float(l2_loss.numpy())})
-            if(opts.grad != 0.0):
-                gradient_loss = tfu.gradient_loss(refined_scaled, ambient_scaled)
-                loss += gradient_loss# + opts.lpips * lpips_loss[0]
-                losses.update({'grad':float(gradient_loss.numpy())})
-            if(opts.lpips != 0.0):
-                lpips_loss = lpips([refined_scaled, ambient_scaled])
-                loss += lpips_loss
-                losses.update({'lpips':float(lpips_loss.numpy())})
-            if(opts.wlpips != 0.0):
-                wlpips_loss = wlpips([refined_scaled, ambient_scaled])
-                loss += wlpips_loss
-                losses.update({'wlpips':float(wlpips_loss.numpy())})
+            l2_loss = tfu.l2_loss(refined_scaled, ambient_scaled)
+            gradient_loss = tfu.gradient_loss(refined_scaled, ambient_scaled)
+            wlpips_loss = wlpips([refined_scaled, ambient_scaled])
+            lpips_loss = lpips([refined_scaled, ambient_scaled])
             
+            # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
+            loss = l2_loss + gradient_loss + opts.lpips * lpips_loss[0] + opts.wlpips * wlpips_loss[0]
+
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
         psnr_refined = tfu.get_psnr(refined_scaled, ambient_scaled)
         psnr_deepfnf = tfu.get_psnr(deepfnf_scaled, ambient_scaled)
-        losses.update({'psnr_refined':float(psnr_refined.numpy()), 'psnr_deepfnf':float(psnr_deepfnf.numpy()), 'loss': float(loss.numpy())})
+        wlpips_deepfnf = wlpips([deepfnf_scaled, ambient_scaled])
+        lpips_deepfnf = lpips([deepfnf_scaled, ambient_scaled])
+        losses = {'loss':loss, 'psnr_refined':psnr_refined, 'psnr_deepfnf':psnr_deepfnf, 'l2_loss':l2_loss, 'gradient_loss':gradient_loss,
+        'wlpips_deepfnf':wlpips_deepfnf[0], 'lpips_deepfnf':lpips_deepfnf[0], 'wlpips_loss':opts.wlpips * wlpips_loss[0], 'lpips_loss':opts.lpips * lpips_loss[0]}
         return losses
 
     def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
         
         losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
-        losses_str = ', '.join(['%s:%.05f' % (k,v) for k, v in losses.items()])
-        print('lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str)
-        loss = losses['loss']
+        losses_str = ', '.join('%s_%.05f'%(k, float(v.numpy())) for k, v in losses.items())
+        print(datetime.now(), ' lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str)
         
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -330,8 +322,9 @@ with tf.device('/gpu:0'):
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",loss.numpy())
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
         if(niter % 100 == 0 and niter != 0):
-            for k, v in losses.items():
-                logger.addScalar(v,k)
+            logger.addScalar(loss.numpy(),'loss')
+            logger.addScalar(psnr_refined.numpy(),'psnr_refined')
+            logger.addScalar(psnr_deepfnf.numpy(),'psnr_deepfnf')
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
             gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
@@ -370,7 +363,6 @@ with tf.device('/gpu:0'):
         niter += 1
         if(opts.overfit):
             for _ in range(int(MAXITER)):
-                niter += 1
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example)
         else:
             # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)

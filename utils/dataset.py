@@ -194,6 +194,10 @@ class TrainSet:
             gen_homography, jitter=jitter, min_scale=min_scale,
             max_scale=max_scale, theta=theta, psz=psz)
 
+        # gen_random_params_fn = functools.partial(
+        #     gen_random_params, min_alpha=0.9999, max_alpha=1.0001,
+        # min_read=-3., max_read=-2, min_shot=-2., max_shot=-1.3)
+
         color_matrices = np.stack(
             [COLOR_MAP_DATA[nm][0] for nm in files],
             axis=0).astype(np.float32)
