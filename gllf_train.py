@@ -312,7 +312,7 @@ with tf.device('/gpu:0'):
         
         losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
         losses_str = ', '.join('%s_%.05f'%(k, float(v.numpy())) for k, v in losses.items())
-        print(datetime.now(), ' lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str)
+        print(datetime.now(), ' lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str, ' alpha %0.4f' % float(example['alpha'].numpy()))
         
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -361,11 +361,22 @@ with tf.device('/gpu:0'):
         niter += 1
         if(opts.overfit):
             #if example does not exist, save it, otherwise load it
-            overfit_example_fn = './overfit_example.pkl'
-            if(os.path.exists(overfit_example_fn)):
-                data = logger.load_pickle(overfit_example_fn)
+            overfit_example_gt_data_fn = './overfit_example_data_gt.pkl'
+            overfit_example_noisy_data_fn = './overfit_example_data_noisy.pkl'
+            if(os.path.exists(overfit_example_gt_data_fn) and os.path.exists(overfit_example_noisy_data_fn)):
+                print('loaded example from file')
+                data_gt = logger.load_pickle(overfit_example_gt_data_fn)
+                data_noisy = logger.load_pickle(overfit_example_noisy_data_fn)
+                net_input = data_noisy['net_input']
+                alpha = data_noisy['alpha']
+                noisy_flash = data_noisy['noisy_flash']
+                noisy_ambient = data_noisy['noisy_ambient']
+                niter = data_noisy['niter']
             else:
-                logger.dump_pickle(overfit_example_fn, data)
+                print('could not load example from file')
+                data_noisy = {'net_input':net_input, 'alpha':alpha, 'noisy_flash':noisy_flash, 'noisy_ambient':noisy_ambient, 'niter':niter}
+                logger.dump_pickle(overfit_example_gt_data_fn, data)
+                logger.dump_pickle(overfit_example_noisy_data_fn, data_noisy)
             for _ in range(int(MAXITER)):
                 niter += 1
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data)
