@@ -78,5 +78,5 @@ class Net(NetAlpha):
     def forward(self, inp, flash, denoised):
         llf_alpha = self.unet(inp) * (self.levels - 1)
 
-        return self.llf(flash, denoised, llf_alpha)
+        return self.llf(flash, denoised, llf_alpha), llf_alpha
     

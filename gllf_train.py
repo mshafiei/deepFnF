@@ -34,7 +34,8 @@ from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
 from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
-# tf.config.run_functions_eagerly(True)
+import cv2
+tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -267,9 +268,14 @@ with tf.device('/gpu:0'):
         
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
         
-        refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, denoise_scaled)
-
-        return refined_scaled, denoise_scaled, ambient_scaled, noisy_flash_scaled, noisy_ambient_scaled
+        refinement_output = model.forward(net_ft_input, noisy_flash_scaled, denoise_scaled)
+        if(type(refinement_output) == tuple):
+            refined_scaled = refinement_output[0]
+            llf_alpha = refinement_output[1]
+        else:
+            refined_scaled = refinement_output
+            llf_alpha = None
+        return refined_scaled, denoise_scaled, ambient_scaled, noisy_flash_scaled, noisy_ambient_scaled, llf_alpha
         
 
     @tf.function
@@ -287,8 +293,13 @@ with tf.device('/gpu:0'):
         
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
         with tf.GradientTape() as tape:
-            refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
-
+            refinement_out = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+            if(type(refinement_out) == tuple):
+                refined_scaled = refinement_out[0]
+                alpha_map = refinement_out[1]
+            else:
+                refined_scaled = refinement_out
+                alpha_map = None
             # Loss
             l2_loss = tfu.l2_loss(refined_scaled, ambient_scaled)
             gradient_loss = tfu.gradient_loss(refined_scaled, ambient_scaled)
@@ -325,9 +336,12 @@ with tf.device('/gpu:0'):
             [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
         if niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
-            gllf, denoisednp, ambientnp, flashnp, noisy = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
+            gllf, denoisednp, ambientnp, flashnp, noisy, alpha_map = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
             psnr_deepfnf = tfu.get_psnr(denoisednp, ambientnp)
-            logger.addImage({'flash':flashnp.numpy()[0], 'noisy':noisy.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised_deepfnf':denoisednp.numpy()[0], 'denoised_gllf':gllf.numpy()[0]},{'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF'},'train')
+            alpha_map = cv2.resize(alpha_map.numpy(), (448,448))
+            images = {'flash':flashnp.numpy()[0], 'noisy':noisy.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised_deepfnf':denoisednp.numpy()[0], 'denoised_gllf':gllf.numpy()[0],'alpha_map':alpha_map[:,:,None]}
+            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'\\alpha'}
+            logger.addImage(images, lbls,'train')
         logger.takeStep()
 
     def training_iterate_synthetic(flash, denoised, niter):
