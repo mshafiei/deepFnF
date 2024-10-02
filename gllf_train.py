@@ -35,7 +35,7 @@ import keras
 from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
