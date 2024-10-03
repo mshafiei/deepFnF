@@ -357,9 +357,8 @@ with tf.device('/gpu:0'):
             fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",float(losses['loss'].numpy()))
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
-        if(niter % 100 == 0 and niter != 0):
-            [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
-        if niter % VALFREQ == 0:
+
+        if(niter % opts.visualize_freq == 0 and opts.no_visualize is False):
             additional_loss = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example)
             losses.update(additional_loss)
             # draw example['ambient'], denoised image, flash image, absolute error
@@ -375,6 +374,10 @@ with tf.device('/gpu:0'):
             if('filename' in example.keys()):
                 logger.addImage(images, lbls,'train',annotation=annotation, image_filename=example['filename'])
 
+        if niter % VALFREQ == 0:
+            additional_loss = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example)
+            losses.update(additional_loss)
+            [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
 
         losses_str = ', '.join('%s_%.07f'%(k, float(v.numpy())) for k, v in losses.items())
         print(datetime.now(), ' lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str, ' alpha %0.4f' % float(example['alpha'].numpy()))
