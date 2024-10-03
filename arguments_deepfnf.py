@@ -50,6 +50,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--bilateral_neighbors', type=float,default=6,help='number of basis')
     parser.add_argument('--deepfnf_train_path', type=str,default='/home/mohammad/Projects/deepfnftf2/logs-grid/deepfnf-tf2-orig/train/',help='number of basis')
     parser.add_argument('--insets_json', type=str,default='',help='number of basis')
+    parser.add_argument('--print_val_freq', type=int,default=100,help='number of basis')
     parser.add_argument('--bs_lam', type=float,default=10,help='number of basis')
     parser.add_argument('--latexName', default="N/A", type=str,help='Latex name of the experiment')
     parser.add_argument('--model', type=str,default='deepfnf',choices=['deepfnf_refine_unet', 'deepfnf_llf_alpha_map_unet_v2', 'deepfnf_llf_alpha_map_image_v2', 'deepfnf_llf_scalar_alpha','deepfnf_llf_scalar_alpha_encoder','deepfnf_llf_alpha_map_unet', 'deepfnf_llf_alpha_map_image', 'flash','noisy','unet_llf','deepfnf_combine_laplacian_pixelwise', 'deepfnf_llf', 'deepfnf_llf_diffable','deepfnf','deepfnf_fft','unet', 'deepfnf_grad','deepfnf_combine_fft','deepfnf_combine_laplacian','net_flash_image','deepfnf-slim'],help='Neural network model')

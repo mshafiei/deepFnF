@@ -159,7 +159,7 @@ with tf.device('/gpu:0'):
     #verify finite difference
     
     @tf.function
-    def gradient_validation(net_input, alpha, noisy_flash, noisy_ambient):
+    def gradient_validation(net_input, alpha, noisy_flash, noisy_ambient, example):
         def loss_eval(model, gt, net_ft_input, noisy_flash_scaled, deepfnf_scaled):
             refined_scaled = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
             # Loss
@@ -276,10 +276,9 @@ with tf.device('/gpu:0'):
             refined_scaled = refinement_output
             llf_alpha = None
         return refined_scaled, denoise_scaled, ambient_scaled, noisy_flash_scaled, noisy_ambient_scaled, llf_alpha
-        
-
+    
     @tf.function
-    def train_step(net_input, alpha, noisy_flash, noisy_ambient, example):
+    def predict_and_scale(net_input, alpha, noisy_flash, noisy_ambient, example):
         denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
         deepfnf_scaled = tfu.camera_to_rgb(
             denoise / alpha, example['color_matrix'], example['adapt_matrix'])
@@ -290,6 +289,35 @@ with tf.device('/gpu:0'):
         ambient_scaled= tfu.camera_to_rgb(
             example['ambient'],
             example['color_matrix'], example['adapt_matrix'])
+
+        return denoise, deepfnf_scaled, noisy_flash_scaled, ambient_scaled
+    
+    @tf.function
+    def predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example):
+        denoise, deepfnf_scaled, noisy_flash_scaled, ambient_scaled = predict_and_scale(net_input, alpha, noisy_flash, noisy_ambient, example)
+        net_ft_input = tf.concat((net_input, denoise), axis=-1)
+        refinement_out = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+        if(type(refinement_out) == tuple):
+            refined_scaled = refinement_out[0]
+            alpha_map = refinement_out[1]
+        else:
+            refined_scaled = refinement_out
+            alpha_map = None
+
+        psnr_refined = tfu.get_psnr(refined_scaled, ambient_scaled)
+        psnr_deepfnf = tfu.get_psnr(deepfnf_scaled, ambient_scaled)
+        wlpips_deepfnf = wlpips([deepfnf_scaled, ambient_scaled])
+        lpips_deepfnf = lpips([deepfnf_scaled, ambient_scaled])
+        wlpips_refined = wlpips([refined_scaled, ambient_scaled])
+        lpips_refined = lpips([refined_scaled, ambient_scaled])
+        losses = {'psnr_refined':psnr_refined, 'psnr_deepfnf':psnr_deepfnf,
+            'wlpips_deepfnf':wlpips_deepfnf, 'lpips_deepfnf':lpips_deepfnf,
+            'wlpips_refined':wlpips_refined, 'lpips_refined':lpips_refined}
+        return losses
+
+    @tf.function
+    def train_step(net_input, alpha, noisy_flash, noisy_ambient, example):
+        denoise, deepfnf_scaled, noisy_flash_scaled, ambient_scaled = predict_and_scale(net_input, alpha, noisy_flash, noisy_ambient, example)
         
         net_ft_input = tf.concat((net_input, denoise), axis=-1)
         with tf.GradientTape() as tape:
@@ -301,29 +329,26 @@ with tf.device('/gpu:0'):
                 refined_scaled = refinement_out
                 alpha_map = None
             # Loss
-            l2_loss = tfu.l2_loss(refined_scaled, ambient_scaled)
-            gradient_loss = tfu.gradient_loss(refined_scaled, ambient_scaled)
-            wlpips_loss = wlpips([refined_scaled, ambient_scaled])
-            lpips_loss = lpips([refined_scaled, ambient_scaled])
+            l2_loss = tf.convert_to_tensor(0.0) if opts.l2 == 0 else tfu.l2_loss(refined_scaled, ambient_scaled)
+            gradient_loss = tf.convert_to_tensor(0.0) if opts.grad == 0 else tfu.gradient_loss(refined_scaled, ambient_scaled)
+            wlpips_loss = tf.convert_to_tensor(0.0) if opts.wlpips == 0 else wlpips([refined_scaled, ambient_scaled])[0]
+            lpips_loss = tf.convert_to_tensor(0.0) if opts.lpips == 0 else lpips([refined_scaled, ambient_scaled])[0]
             
             # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
-            loss = l2_loss + gradient_loss + opts.lpips * lpips_loss[0] + opts.wlpips * wlpips_loss[0]
+            loss = l2_loss + gradient_loss + opts.lpips * lpips_loss + opts.wlpips * wlpips_loss
 
         gradients = tape.gradient(loss, model.weights.values())
         opt.apply_gradients(zip(gradients,model.weights.values()))
-        psnr_refined = tfu.get_psnr(refined_scaled, ambient_scaled)
-        psnr_deepfnf = tfu.get_psnr(deepfnf_scaled, ambient_scaled)
-        wlpips_deepfnf = wlpips([deepfnf_scaled, ambient_scaled])
-        lpips_deepfnf = lpips([deepfnf_scaled, ambient_scaled])
-        losses = {'loss':loss, 'psnr_refined':psnr_refined, 'psnr_deepfnf':psnr_deepfnf, 'l2_loss':l2_loss, 'gradient_loss':gradient_loss,
-        'wlpips_deepfnf':wlpips_deepfnf[0], 'lpips_deepfnf':lpips_deepfnf[0], 'wlpips_loss':opts.wlpips * wlpips_loss[0], 'lpips_loss':opts.lpips * lpips_loss[0]}
+
+        losses = {'loss':loss, 'l2_loss':l2_loss, 'gradient_loss':gradient_loss,
+        'wlpips_loss':opts.wlpips * wlpips_loss, 'lpips_loss':opts.lpips * lpips_loss}
         return losses
 
     def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
         
         losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
-        losses_str = ', '.join('%s_%.05f'%(k, float(v.numpy())) for k, v in losses.items())
-        print(datetime.now(), ' lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str, ' alpha %0.4f' % float(example['alpha'].numpy()))
+
+        
         
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -335,13 +360,24 @@ with tf.device('/gpu:0'):
         if(niter % 100 == 0 and niter != 0):
             [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
         if niter % VALFREQ == 0:
+            additional_loss = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example)
+            losses.update(additional_loss)
             # draw example['ambient'], denoised image, flash image, absolute error
             gllf, denoisednp, ambientnp, flashnp, noisy, alpha_map = val_step(net_input, alpha, noisy_flash, noisy_ambient, example)
-            psnr_deepfnf = tfu.get_psnr(denoisednp, ambientnp)
+            annotation_deepfnf = '<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(additional_loss['psnr_deepfnf'],additional_loss['lpips_deepfnf'],additional_loss['wlpips_deepfnf'])
+            annotation_ours = '<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(additional_loss['psnr_refined'],additional_loss['lpips_refined'],additional_loss['wlpips_refined'])
+            annotation = {'flash':None,'noisy':None,'ambient':None,'denoised_deepfnf':annotation_deepfnf,'denoised_gllf':annotation_ours,'alpha_map':None}
+            
             alpha_map = cv2.resize(alpha_map.numpy(), (448,448))
+            
             images = {'flash':flashnp.numpy()[0], 'noisy':noisy.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised_deepfnf':denoisednp.numpy()[0], 'denoised_gllf':gllf.numpy()[0],'alpha_map':alpha_map[:,:,None]}
-            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'\\alpha'}
-            logger.addImage(images, lbls,'train')
+            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'$\\alpha$'}
+            if('filename' in example.keys()):
+                logger.addImage(images, lbls,'train',annotation=annotation, image_filename=example['filename'])
+
+
+        losses_str = ', '.join('%s_%.07f'%(k, float(v.numpy())) for k, v in losses.items())
+        print(datetime.now(), ' lr: ', float(opt.learning_rate.numpy()), ' iter: ',niter, losses_str, ' alpha %0.4f' % float(example['alpha'].numpy()))
         logger.takeStep()
 
     def training_iterate_synthetic(flash, denoised, niter):
@@ -386,9 +422,11 @@ with tf.device('/gpu:0'):
                 noisy_flash = data_noisy['noisy_flash']
                 noisy_ambient = data_noisy['noisy_ambient']
                 niter = data_noisy['niter']
+                
             else:
                 print('could not load example from file')
-                data_noisy = {'net_input':net_input, 'alpha':alpha, 'noisy_flash':noisy_flash, 'noisy_ambient':noisy_ambient, 'niter':niter}
+                denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
+                data_noisy = {'net_input':net_input, 'alpha':alpha, 'noisy_flash':noisy_flash, 'noisy_ambient':noisy_ambient, 'niter':niter, 'denoise':denoise}
                 logger.dump_pickle(overfit_example_gt_data_fn, data)
                 logger.dump_pickle(overfit_example_noisy_data_fn, data_noisy)
             for _ in range(int(MAXITER)):

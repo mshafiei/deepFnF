@@ -31,6 +31,7 @@ def load_image(filename, color_matrix, adapt_matrix):
 
     example['color_matrix'] = color_matrix
     example['adapt_matrix'] = adapt_matrix
+    example['filename'] = filename
     return example
 
 
