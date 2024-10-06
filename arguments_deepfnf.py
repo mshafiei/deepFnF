@@ -38,6 +38,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--alpha_height', type=int, default=28, help='size of kernel')
     parser.add_argument('--llf_alpha', type=float, default=1.0, help='size of kernel')
     parser.add_argument('--llf_beta', type=float, default=1.0, help='size of kernel')
+    parser.add_argument('--llf_sigma', type=float, default=1.0, help='size of kernel')
     parser.add_argument('--llf_levels', type=int, default=2, help='size of kernel')
     parser.add_argument('--n_pyramid_levels', type=int, default=5, help='size of kernel')
     parser.add_argument('--channels_count_factor', type=float,default=1.,help='Scale the channel count for DeepFnF network')
