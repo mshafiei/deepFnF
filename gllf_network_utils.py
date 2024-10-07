@@ -12,10 +12,10 @@ def CreateNetwork(opts):
         model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_llf_alpha_map_unet_v2'):
         from net_llf_tf2_local_alpha_unet_v2 import Net as net_unet_v2
-        model = net_unet_v2(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+        model = net_unet_v2(llf_sigma=opts.llf_sigma,alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_llf_alpha_map_image_v2'):
         from net_llf_tf2_local_alpha_overfitting_v2 import Net as net_image_v2
-        model = net_image_v2(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+        model = net_image_v2(llf_sigma=opts.llf_sigma,alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_llf_alpha_map_image'):
         from net_llf_tf2_local_alpha_overfitting import Net as net_unet
         model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)

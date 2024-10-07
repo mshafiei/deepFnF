@@ -35,7 +35,7 @@ import keras
 from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -368,8 +368,13 @@ with tf.device('/gpu:0'):
             annotation = {'flash':None,'noisy':None,'ambient':None,'denoised_deepfnf':annotation_deepfnf,'denoised_gllf':annotation_ours,'alpha_map':None}
             
             alpha_map = cv2.resize(alpha_map.numpy(), (448,448))
+
+            exposure = 4 if opts.llf_sigma == 0 else 0
+            gllf = gllf.numpy()[0] * 2.0**exposure
+            annotation =  None if opts.llf_sigma == 0 else annotation
+
             
-            images = {'flash':flashnp.numpy()[0], 'noisy':noisy.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised_deepfnf':denoisednp.numpy()[0], 'denoised_gllf':gllf.numpy()[0],'alpha_map':alpha_map[:,:,None]}
+            images = {'flash':flashnp.numpy()[0], 'noisy':noisy.numpy()[0], 'ambient':ambientnp.numpy()[0], 'denoised_deepfnf':denoisednp.numpy()[0], 'denoised_gllf':gllf,'alpha_map':alpha_map[:,:,None]}
             lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'$\\alpha$'}
             if('filename' in example.keys()):
                 logger.addImage(images, lbls,'train',annotation=annotation, image_filename=example['filename'])

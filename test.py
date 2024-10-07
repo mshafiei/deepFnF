@@ -100,7 +100,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, data['color_matrix'], data['adapt_matrix'])
         net_ft_input = tf.concat((net_input, denoised), axis=-1)
-        denoise = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+        denoise, _ = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
     else:
         denoise = eval_model(model, net_input)
     end = timer()

@@ -36,13 +36,13 @@ def derivative_tensor_size(ah, aw, imgsz):
     return out_h, out_w, ratio_x, ratio_y, offset_x, offset_y
 
 @tf.numpy_function(Tout=tf.float32)
-def call_llf(flash, denoised, alpha, levels, beta):
+def call_llf(flash, denoised, alpha, levels, beta, sigma):
     flash_np = flash
     denoised_np = denoised
     ah, aw = alpha.shape
     h, w = denoised_np.shape[1:]
     llf_out = np.empty([3, h, w], dtype=np.float32)
-    guided_local_laplacian_color(flash_np, denoised_np, levels, alpha, beta, aw, ah, w, h, llf_out)
+    guided_local_laplacian_color(flash_np, denoised_np, levels, alpha, beta, sigma, aw, ah, w, h, llf_out)
     return llf_out
 
 @tf.numpy_function(Tout=tf.float32)
@@ -56,7 +56,7 @@ def call_dllf(flash, denoised, alpha, levels, beta, block_h, block_w, stride_y, 
     return dllf_out
 
 class Net(OriginalNet):
-    def __init__(self, alpha_width=8, alpha_height=8, llf_beta=1, llf_levels=2, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448):
+    def __init__(self, llf_sigma=1, alpha_width=8, alpha_height=8, llf_beta=1, llf_levels=2, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1, lmbda=1,IMSZ=448):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
@@ -70,6 +70,7 @@ class Net(OriginalNet):
         self.alpha_height = alpha_height
         self.beta = llf_beta
         self.levels = llf_levels
+        self.sigma = llf_sigma
 
         IMSZ = int(2**np.ceil(np.log2(self.IMSZ)))
         alpha_height, alpha_width = int(2**np.ceil(np.log2(self.alpha_height))), int(2**np.ceil(np.log2(self.alpha_width)))
@@ -107,7 +108,7 @@ class Net(OriginalNet):
 
         llf_output = call_llf(tf.transpose(flash[0,...],(2,0,1)),
             tf.transpose(denoised[0,...],(2,0,1)),
-            alpha, self.levels, self.beta)
+            alpha, self.levels, self.beta, self.sigma)
 
         def grad_fn(upstream):
             #pad upstream

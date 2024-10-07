@@ -50,7 +50,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--bilateral_smooth', type=float,default=8,help='number of basis')
     parser.add_argument('--bilateral_neighbors', type=float,default=6,help='number of basis')
     parser.add_argument('--deepfnf_train_path', type=str,default='/home/mohammad/Projects/deepfnftf2/logs-grid/deepfnf-tf2-orig/train/',help='number of basis')
-    parser.add_argument('--insets_json', type=str,default='',help='number of basis')
+    parser.add_argument('--insets_json', type=str,default='-',help='number of basis')
     parser.add_argument('--print_val_freq', type=int,default=100,help='number of basis')
     parser.add_argument('--bs_lam', type=float,default=10,help='number of basis')
     parser.add_argument('--latexName', default="N/A", type=str,help='Latex name of the experiment')
