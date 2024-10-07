@@ -172,9 +172,9 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             original_metrics_pred = errval.eval(ambient[None,...],denoise_original_deepfnf[None,...])
             for x in original_metrics_pred.keys():
                 original_metrics[x] = np.array(original_metrics_pred[x])[0]
-        if(denoised_deepfnf is not None):
+        if(deepfnf_scaled is not None):
             original_metrics = {}
-            original_metrics_pred = errval.eval(ambient[None,...],denoised_deepfnf.numpy())
+            original_metrics_pred = errval.eval(ambient[None,...],deepfnf_scaled.numpy())
             for x in original_metrics_pred.keys():
                 original_metrics[x] = np.array(original_metrics_pred[x])[0]
 
