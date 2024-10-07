@@ -78,6 +78,8 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     denoise_original = None
     laplacian_pyramid = None
     denoise_original_deepfnf = None
+    alpha_map = None
+    deepfnf_scaled = None
     start = timer()
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
@@ -94,13 +96,13 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         laplacianWeights = model.getLaplacianWeights()
     elif(logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2'):
         # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
-        denoised = model.deepfnf_model.forward(net_input)
+        denoised_deepfnf = model.deepfnf_model.forward(net_input)
         deepfnf_scaled = tfu.camera_to_rgb(
-            denoised / tf.squeeze(alpha), data['color_matrix'], data['adapt_matrix'])
+            denoised_deepfnf / tf.squeeze(alpha), data['color_matrix'], data['adapt_matrix'])
         noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, data['color_matrix'], data['adapt_matrix'])
-        net_ft_input = tf.concat((net_input, denoised), axis=-1)
-        denoise, _ = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+        net_ft_input = tf.concat((net_input, denoised_deepfnf), axis=-1)
+        denoise, alpha_map = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
     else:
         denoise = eval_model(model, net_input)
     end = timer()
@@ -194,17 +196,28 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         laplacian_interpolation_plot = viz.plot(xs, source_laplacian_weight) / 255
 
     blank = inv_kernel * 0 + 1
-    cols = 5
+    cols = 6
     if(c % logger.opts.visualize_freq == 0 and logger.opts.no_visualize is False):
-        im = {'flash':flash_wb, 'noisy':noisy_wb, 'ambient':ambient, 'denoise':denoise}
-        lbl = {'flash':r'$I_{flash}$', 'noisy':r'$I_{noisy}$', 'ambient':r'$I_{ambient}$','denoise':r'$I_{ours}$'}
+        im = {'flash':flash_wb, 'noisy':noisy_wb, 'ambient':ambient}
+        lbl = {'flash':r'$I_{flash}$', 'noisy':r'$I_{noisy}$', 'ambient':r'$I_{ambient}$'}
         if(not(denoise_original is None)):
             cols+=1
             im.update({'denoise_original': denoise_original})
             lbl.update({'denoise_original': "deepfnf"})
+        if(deepfnf_scaled is not None):
+            im.update({'deepfnf_scaled':deepfnf_scaled})
+            lbl.update({'deepfnf_scaled':r'$DeepFnF$'})
+        im.update({'denoise':denoise})
+        lbl.update({'denoise':r'$Deepfnf+GLLF$'})
+        if(alpha_map is not None):
+            import cv2
+            alpha_map = cv2.resize(alpha_map.numpy(), (448,448))
+            im.update({'alpha_map':alpha_map})
+            lbl.update({'alpha_map':r'$\alpha$'})
 
-        im.update({'blank':blank})
-        lbl.update({'blank':r'$Measurements$'})
+        if(logger.opts.visualize_metrics):
+            im.update({'blank':blank})
+            lbl.update({'blank':r'$Measurements$'})
         # annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
         annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'])}
         if(laplacian_pyramid is not None):
@@ -213,31 +226,32 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             for i, l in enumerate(laplacian_pyramid):
                 im.update({'laplacian_%i'%i: np.array(np.squeeze(l) / np.squeeze(alpha) * 10)})
                 lbl.update({'laplacian_%i'%i: "l_%i~coeff:%f"%(i,np.array(source_laplacian_weight)[i])})
-        if('spatial_lpips' in metrics.keys()):
+        if('spatial_lpips' in metrics.keys() and logger.opts.visualize_metrics):
             im.update({'spatial_lpips':metrics['spatial_lpips']})
             lbl.update({'spatial_lpips':r'$LPIPS$'})
             if(original_metrics is not None):
                 im.update({'spatial_lpips_original':original_metrics['spatial_lpips']})
                 lbl.update({'spatial_lpips_original':r'$LPIPS-deepfnf$'})
-        if('spatial_euclidean_distance' in metrics.keys()):
+        if('spatial_euclidean_distance' in metrics.keys() and logger.opts.visualize_metrics):
             im.update({'spatial_euclidean_distance':metrics['spatial_euclidean_distance']})
             lbl.update({'spatial_euclidean_distance':r'$|I_{ours} - I_{ambient}|$'})
             if(original_metrics is not None):
                 im.update({'spatial_euclidean_distance_original':original_metrics['spatial_euclidean_distance']})
                 lbl.update({'spatial_euclidean_distance_original':r'$I_{deepfnf} - I_{ambient}$'})
-        if('spatial_wlpips' in metrics.keys()):
+        if('spatial_wlpips' in metrics.keys() and logger.opts.visualize_metrics):
             im.update({'spatial_wlpips':metrics['spatial_wlpips']})
             lbl.update({'spatial_wlpips':r'$WLPIPS$'})
             if(original_metrics is not None):
                 im.update({'spatial_wlpips_original':original_metrics['spatial_wlpips']})
                 lbl.update({'spatial_wlpips_original':r'$WLPIPS-deepfnf$'})
 
+        filename = '%s/%i/%i.npz' % (datapath, k, c)
         # logger.addImage(im,lbl,'deepfnf',comp_lbls=['denoise','ambient'],dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',mode='test')
         if(logger.opts.separate_images):
             logger.addIndividualImages(im,lbl,'deepfnf',mode='test',annotation=annotation, idx='%03i_%03i'%(k,c))
             # logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test')
         else:
-            logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test',idx='%03i_%03i'%(k,c))
+            logger.addImage(im,lbl,'deepfnf',dim_type='HWC',annotation=annotation,ltype='Jupyter',cols=cols,mode='test',idx='%03i_%03i'%(k,c), image_filename=filename)
     logger.takeStep()
 
     update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
