@@ -172,6 +172,11 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             original_metrics_pred = errval.eval(ambient[None,...],denoise_original_deepfnf[None,...])
             for x in original_metrics_pred.keys():
                 original_metrics[x] = np.array(original_metrics_pred[x])[0]
+        if(denoised_deepfnf is not None):
+            original_metrics = {}
+            original_metrics_pred = errval.eval(ambient[None,...],denoised_deepfnf.numpy())
+            for x in original_metrics_pred.keys():
+                original_metrics[x] = np.array(original_metrics_pred[x])[0]
 
         metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
     print('running_time1: ', running_time)
@@ -218,8 +223,11 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         if(logger.opts.visualize_metrics):
             im.update({'blank':blank})
             lbl.update({'blank':r'$Measurements$'})
-        # annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
         annotation = {'noisy':'<br>Darkened:x%i'%(int(np.round(1/np.mean(alpha)))),'denoise':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(metrics['psnr'],metrics['lpips'],metrics['wlpips'])}
+        if(original_metrics is not None):
+            annotation.update({'deepfnf_scaled':'<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(original_metrics['psnr'],original_metrics['lpips'],original_metrics['wlpips'])})
+        # annotation = {'blank':'<br>alpha:%.3f<br>PSNR:%.3f<br>LPIPS:%.3f<br>SSIM:%.3f<br>MSSSIM:%.3f<br>WLPIPS:%.3f'%(np.mean(alpha),metrics['psnr'],metrics['lpips'],metrics['ssim'],metrics['msssim'],metrics['wlpips'])}
+        
         if(laplacian_pyramid is not None):
             im.update({'laplacian_interpolation_plot':laplacian_interpolation_plot})
             lbl.update({'laplacian_interpolation_plot':'L interpolation'})
@@ -251,7 +259,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             logger.addIndividualImages(im,lbl,'deepfnf',mode='test',annotation=annotation, idx='%03i_%03i'%(k,c))
             # logger.addImage(im,lbl,'deepfnf',dim_type='HWC',addinset=False,annotation=annotation,ltype='Jupyter',cols=cols,mode='test')
         else:
-            logger.addImage(im,lbl,'deepfnf',dim_type='HWC',annotation=annotation,ltype='Jupyter',cols=cols,mode='test',idx='%03i_%03i'%(k,c), image_filename=filename)
+            logger.addImage(im,lbl,'deepfnf',dim_type='HWC',annotation=annotation,ltype='Jupyter',cols=cols,mode='test',idx='%03i_%03i'%(k,c), image_filename=filename, vertical_spacing_scale=3)
     logger.takeStep()
 
     update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
