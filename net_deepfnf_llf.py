@@ -179,7 +179,8 @@ class Net:
         out = self.conv('output', out, self.num_basis + 6, relu=False)
         self.coeffs_pre_soft = out
         self.coeffs = out[..., :self.num_basis]
-        self.scale = out[..., -3:]
+        self.scale = out[..., -6:-3]
+        self.llf_alpha = out[..., -3:]
         self.activations['output'] = self.coeffs
 
     def combine(self):

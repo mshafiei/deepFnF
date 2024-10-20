@@ -94,7 +94,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     elif(logger.opts.model == 'deepfnf_combine_laplacian_pixelwise'):
         denoise = eval_model_w_alpha(model, net_input, data['alpha'])
         laplacianWeights = model.getLaplacianWeights()
-    elif(logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2'):
+    elif(logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
         # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
         denoised_deepfnf = model.deepfnf_model.forward(net_input)
         deepfnf_scaled = tfu.camera_to_rgb(
