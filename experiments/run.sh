@@ -28,7 +28,7 @@ export CUDA_VISIBLE_DEVICES=""
 fi
 
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
-pip3 install imageio
+pip3 install imageio easydict
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
