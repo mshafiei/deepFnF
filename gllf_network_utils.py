@@ -28,6 +28,9 @@ def CreateNetwork(opts):
     elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf'):
         from net_llf_tf2_tf_local_alpha_Deepfnf import Net as net_deepfnf
         model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf_alpha'):
+        from net_llf_tf2_tf_local_alpha_Deepfnf_alpha import Net as net_deepfnf
+        model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
     elif(opts.model == 'deepfnf_llf_scalar_alpha_encoder'):
         from net_llf_tf2_diffable_encoder import Net as net_unet
         model = net_unet(llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
