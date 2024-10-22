@@ -36,7 +36,7 @@ from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as dotmap
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -383,9 +383,11 @@ with tf.device('/gpu:0'):
             exposure = 4 if opts.llf_sigma == 0 else 0
             # gllf = gllf.numpy()[0] * 2.0**exposure
             annotation =  None if opts.llf_sigma == 0 else annotation
-
+            alpha_min = tf.reduce_min(alpha_map)
+            alpha_max = tf.reduce_max(alpha_map)
+            alpha_map = (alpha_map - alpha_min) / (alpha_max - alpha_min)
             images = {'flash':model_inputs.noisy_flash_scaled.numpy()[0], 'noisy':deepfnf_out.noisy_ambient.numpy()[0], 'ambient':deepfnf_out.ambient_scaled.numpy()[0], 'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0], 'denoised_gllf':val_output.model_output.gllf_out,'alpha_map':alpha_map}
-            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'$\\alpha$'}
+            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'$\\huge{\\alpha \\in [%.02f,%.02f]}$'%(alpha_min, alpha_max)}
             if(val_output.model_output.llf_guide is not None):
                 images.update({'llf_guide':val_output.model_output.llf_guide.numpy()})
                 lbls.update({'llf_guide':'I_h'})
@@ -394,7 +396,7 @@ with tf.device('/gpu:0'):
                 lbls.update({'llf_input':'I_i'})
 
             if('filename' in example.keys()):
-                logger.addImage(images, lbls,'train',cols=5, annotation=annotation, image_filename=example['filename'], font_size_scale=2)
+                logger.addImage(images, lbls,'train',cols=5, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
     
         if((niter == 0 or niter % opts.visualize_freq == 0 )and opts.no_visualize is False):
             visualize()
@@ -423,7 +425,7 @@ with tf.device('/gpu:0'):
         
         if VALFREQ > 0 and niter % VALFREQ == 0:
             # draw example['ambient'], denoised image, flash image, absolute error
-            logger.addImage({'flash':flash.numpy()[0], 'denoised':denoised.numpy()[0], 'ambient':denoised.numpy()[0], 'gllf_out':denoise_scaled.numpy()},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise', 'gllf_out':'GLLF output'},'train')
+            logger.addImage({'flash':flash.numpy()[0], 'denoised':denoised.numpy()[0], 'ambient':denoised.numpy()[0], 'gllf_out':denoise_scaled.numpy()},{'flash':'Flash','ambient':'Ambient','denoised':'Denoise', 'gllf_out':'GLLF output'},'train',vertical_spacing_scale=2)
         logger.takeStep()
 
         gradients = tape.gradient(loss, model.weights.values())
@@ -451,13 +453,15 @@ with tf.device('/gpu:0'):
                 noisy_flash = data_noisy['noisy_flash']
                 noisy_ambient = data_noisy['noisy_ambient']
                 niter = data_noisy['niter']
-                
             else:
                 print('could not load example from file')
                 denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
                 data_noisy = {'net_input':net_input, 'alpha':alpha, 'noisy_flash':noisy_flash, 'noisy_ambient':noisy_ambient, 'niter':niter, 'denoise':denoise}
                 logger.dump_pickle(overfit_example_gt_data_fn, data)
                 logger.dump_pickle(overfit_example_noisy_data_fn, data_noisy)
+            data.update(data_noisy)
+            data.update(data_gt)
+            net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data)
             for _ in range(int(MAXITER)):
                 niter += 1
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data)

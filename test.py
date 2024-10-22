@@ -15,6 +15,7 @@ from BilateralParallel import bilateral_rgb
 import cvgutils.Linalg as Linalg
 import cvgutils.Viz as viz
 from timeit import default_timer as timer
+from easydict import EasyDict as dotmap
 
 @tf.function
 def eval_model_w_alpha(model, netinput, alpha):
@@ -80,6 +81,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     denoise_original_deepfnf = None
     alpha_map = None
     deepfnf_scaled = None
+    gllf_guide = None
     start = timer()
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
@@ -94,7 +96,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     elif(logger.opts.model == 'deepfnf_combine_laplacian_pixelwise'):
         denoise = eval_model_w_alpha(model, net_input, data['alpha'])
         laplacianWeights = model.getLaplacianWeights()
-    elif(logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
+    elif(logger.opts.model == "net_llf_tf2_tf_local_alpha_Deepfnf_alpha" or logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
         # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
         denoised_deepfnf = model.deepfnf_model.forward(net_input)
         deepfnf_scaled = tfu.camera_to_rgb(
@@ -102,7 +104,15 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, data['color_matrix'], data['adapt_matrix'])
         net_ft_input = tf.concat((net_input, denoised_deepfnf), axis=-1)
-        denoise, alpha_map = model.forward(net_ft_input, noisy_flash_scaled, deepfnf_scaled)
+        inputs = dotmap()
+        inputs.net_ft_input = net_ft_input
+        inputs.noisy_flash_scaled = noisy_flash_scaled
+        inputs.deepfnf_scaled = deepfnf_scaled
+        inputs.color_matrix = data['color_matrix']
+        inputs.adapt_matrix = data['adapt_matrix']
+        model_output = dotmap(model.forward(inputs))
+        denoise, alpha_map = model_output.gllf_out, model_output.llf_alpha[0]
+        gllf_guide = model_output.llf_guide
     else:
         denoise = eval_model(model, net_input)
     end = timer()
@@ -201,7 +211,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         laplacian_interpolation_plot = viz.plot(xs, source_laplacian_weight) / 255
 
     blank = inv_kernel * 0 + 1
-    cols = 6
+    cols = 5
     if(c % logger.opts.visualize_freq == 0 and logger.opts.no_visualize is False):
         im = {'flash':flash_wb, 'noisy':noisy_wb, 'ambient':ambient}
         lbl = {'flash':r'$I_{flash}$', 'noisy':r'$I_{noisy}$', 'ambient':r'$I_{ambient}$'}
@@ -214,11 +224,16 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
             lbl.update({'deepfnf_scaled':r'$DeepFnF$'})
         im.update({'denoise':denoise})
         lbl.update({'denoise':r'$Deepfnf+GLLF$'})
+        if(gllf_guide is not None):
+            im.update({'gllf_guide':gllf_guide})
+            lbl.update({'gllf_guide':r'$I_{H}$'})
         if(alpha_map is not None):
             import cv2
             alpha_map = cv2.resize(alpha_map.numpy(), (448,448))
+            alpha_min, alpha_max = alpha_map.min(), alpha_map.max()
+            alpha_map = (alpha_map - alpha_min) / (alpha_max - alpha_min)
             im.update({'alpha_map':alpha_map})
-            lbl.update({'alpha_map':r'$\alpha$'})
+            lbl.update({'alpha_map':'$\\alpha \\in [%.02f, %.02f]$' %(alpha_min, alpha_max)})
 
         if(logger.opts.visualize_metrics):
             im.update({'blank':blank})
