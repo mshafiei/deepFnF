@@ -89,13 +89,13 @@ def slice(l_i_i, l_g_i, l, IMSZ=448):
 def remap(fx, alpha):
     return alpha * fx * tf.exp(-fx * fx / 2.0)
 
-def remapping(i, idx_guide, k_i, k_g, n_levels, sigma, beta, alpha):
+def remapping(i, idx_guide, k_i, k_g, n_levels, sigma, beta, alpha_h, alpha_i):
     level_input = k_i / (n_levels - 1)
     level_guide = k_g / (n_levels - 1)
-    return sigma * level_input + beta * (i - level_input) + remap(idx_guide - level_guide, alpha)
+    return sigma * level_input + beta * (i - level_input) + remap(idx_guide - level_guide, alpha_h) + remap(idx_guide - level_guide, alpha_i)
 
 @tf.function
-def gllf(im_i, im_g, im_i_pyramid, im_g_pyramid, max_levels, max_discrete_levels, alpha, beta=1, sigma=1, IMSZ=448):
+def gllf(im_i, im_g, im_i_pyramid, im_g_pyramid, max_levels, max_discrete_levels, alpha_h, alpha_i, beta=1, sigma=1, IMSZ=448):
     im_i_pyramid = tf.stop_gradient(im_i_pyramid)
     im_g_pyramid = tf.stop_gradient(im_g_pyramid)
     #input and guide pyramids
@@ -110,7 +110,7 @@ def gllf(im_i, im_g, im_i_pyramid, im_g_pyramid, max_levels, max_discrete_levels
     for k_i in range(max_discrete_levels):
         l_i = []
         for k_g in range(max_discrete_levels):
-            r_i_j = remapping(im_i, idx_guide, k_i, k_g, max_discrete_levels, sigma, beta, alpha)
+            r_i_j = remapping(im_i, idx_guide, k_i, k_g, max_discrete_levels, sigma, beta, alpha_h, alpha_i)
             #compute gaussian and laplacian of remapped images
             f_i_j_g = GaussianPyramid(r_i_j, max_levels)
             
@@ -176,7 +176,7 @@ def run_gllf():
     im_g = cv2.resize(im_g, (IMSZ, IMSZ))[None,...]
 
     timing_iterations = 2
-    fn = lambda input, guide, alpha_, beta_: gllf(input, guide,input, guide, max_levels, max_discrete_levels, alpha_, IMSZ=448, beta=beta_, sigma=sigma)
+    fn = lambda input, guide, alpha_h, alpha_i, beta_: gllf(input, guide,input, guide, max_levels, max_discrete_levels, alpha_h, alpha_i, IMSZ=448, beta=beta_, sigma=sigma)
     alpha_map = alpha * np.ones_like(im_i)
     im_i_var = tf.Variable(im_i)
     im_g_var = tf.Variable(im_g)

@@ -20,7 +20,7 @@ class Net(NetAlpha):
         if(not self.alpha_is_scalar):
             self.layers_count = np.floor(5.0 - np.log2(self.IMSZ // self.alpha_width))
         
-        self.llf = lambda input, guide, input_pyramid, guide_pyramid, alpha_: gllf(input, guide, input_pyramid, guide_pyramid, self.levels, self.levels, alpha_, IMSZ=self.IMSZ, beta=self.beta, sigma=1)
+        self.llf = lambda input, guide, input_pyramid, guide_pyramid, alpha_h, alpha_i: gllf(input, guide, input_pyramid, guide_pyramid, self.levels, self.levels, alpha_h, alpha_i, IMSZ=self.IMSZ, beta=self.beta, sigma=1)
         
     def filter_flash(self, inp):
         self.predict_coeff(inp)
@@ -75,9 +75,9 @@ class Net(NetAlpha):
         #     llf_alpha = llf_alpha
         # return denoised_flash_scaled, denoised, denoised_flash_scaled, flash
         # return self.llf(denoised, denoised_flash_scaled, 1), denoised, denoised_flash_scaled, self.llf_alpha
-        outputs.gllf_out = self.llf(denoised, denoised_flash_scaled, denoised, flash, self.llf_alpha)
+        outputs.gllf_out = self.llf(denoised, denoised_flash_scaled, denoised, flash, self.llf_alpha, 0)
         outputs.llf_input = denoised
         outputs.llf_guide = denoised_flash_scaled
-        outputs.llf_alpha = self.llf_alpha
+        outputs.llf_alpha_h = self.llf_alpha
         return dict(outputs)
         # return self.llf(denoised, denoised_flash_scaled, denoised, denoised_flash_scaled, 1), denoised, denoised_flash_scaled, denoised_flash_scaled

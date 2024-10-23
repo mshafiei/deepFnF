@@ -111,7 +111,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         inputs.color_matrix = data['color_matrix']
         inputs.adapt_matrix = data['adapt_matrix']
         model_output = dotmap(model.forward(inputs))
-        denoise, alpha_map = model_output.gllf_out, model_output.llf_alpha[0]
+        denoise, alpha_map = model_output.gllf_out, model_output.llf_alpha_h[0]
         gllf_guide = model_output.llf_guide
     else:
         denoise = eval_model(model, net_input)
@@ -123,7 +123,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     # denoise = noisy_flash
     ambient = tfu.camera_to_rgb(
         ambient, data['color_matrix'], data['adapt_matrix'])
-    if(logger.opts.model != 'deepfnf_llf_alpha_map_unet' and logger.opts.model != 'deepfnf_llf_alpha_map_unet_v2'):
+    if(logger.opts.model != 'deepfnf_llf_alpha_map_unet' and logger.opts.model != 'deepfnf_llf_alpha_map_unet_v2' and logger.opts.model != 'net_llf_tf2_tf_local_alpha_Deepfnf_alpha'):
         denoise = denoise / alpha
         denoise = tfu.camera_to_rgb(
             denoise, data['color_matrix'], data['adapt_matrix'])

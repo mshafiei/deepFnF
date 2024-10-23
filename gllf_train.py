@@ -36,7 +36,7 @@ from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as dotmap
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -355,8 +355,17 @@ with tf.device('/gpu:0'):
         'wlpips_loss':opts.wlpips * wlpips_loss, 'lpips_loss':opts.lpips * lpips_loss}
         return losses
 
-    def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
+    def train_step_test(net_input, alpha, noisy_flash, noisy_ambient, example):
+        deepfnf_output = dotmap(predict_and_scale(net_input, alpha, noisy_flash, noisy_ambient, example))
+        net_ft_input = tf.concat((net_input, deepfnf_output.denoise), axis=-1)
+        deepfnf_output.net_ft_input = net_ft_input
+        deepfnf_output.color_matrix = example['color_matrix']
+        deepfnf_output.adapt_matrix = example['adapt_matrix']
+        gllf = dotmap(model.forward(dict(deepfnf_output)))
+        print('train step test')
         
+    def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example):
+        # losses = train_step_test(net_input, alpha, noisy_flash, noisy_ambient, example)
         losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example)
 
         # Save model weights if needed
@@ -378,16 +387,27 @@ with tf.device('/gpu:0'):
             annotation_ours = '<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(additional_loss['psnr_refined'],additional_loss['lpips_refined'],additional_loss['wlpips_refined'])
             annotation = {'flash':None,'noisy':None,'ambient':None,'denoised_deepfnf':annotation_deepfnf,'denoised_gllf':annotation_ours,'alpha_map':None}
             
-            alpha_map = cv2.resize(val_output.model_output.llf_alpha.numpy()[0], (448,448))[None,...]
-
             exposure = 4 if opts.llf_sigma == 0 else 0
-            # gllf = gllf.numpy()[0] * 2.0**exposure
-            annotation =  None if opts.llf_sigma == 0 else annotation
-            alpha_min = tf.reduce_min(alpha_map)
-            alpha_max = tf.reduce_max(alpha_map)
-            alpha_map = (alpha_map - alpha_min) / (alpha_max - alpha_min)
-            images = {'flash':model_inputs.noisy_flash_scaled.numpy()[0], 'noisy':deepfnf_out.noisy_ambient.numpy()[0], 'ambient':deepfnf_out.ambient_scaled.numpy()[0], 'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0], 'denoised_gllf':val_output.model_output.gllf_out,'alpha_map':alpha_map}
-            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF','alpha_map':'$\\huge{\\alpha \\in [%.02f,%.02f]}$'%(alpha_min, alpha_max)}
+            
+            images = {'flash':model_inputs.noisy_flash_scaled.numpy()[0], 'noisy':deepfnf_out.noisy_ambient.numpy()[0], 'ambient':deepfnf_out.ambient_scaled.numpy()[0], 'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0], 'denoised_gllf':val_output.model_output.gllf_out}
+            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_deepfnf':'DeepFnF','denoised_gllf':'DeepFnF+GLLF'}
+            
+            if('alpha_map_h' in val_output.model_output):
+                alpha_map_h = cv2.resize(val_output.model_output.llf_alpha_h.numpy()[0], (448,448))[None,...]
+                # gllf = gllf.numpy()[0] * 2.0**exposure
+                annotation =  None if opts.llf_sigma == 0 else annotation
+                alpha_h_min = tf.reduce_min(alpha_map_h)
+                alpha_h_max = tf.reduce_max(alpha_map_h)
+                alpha_map_h = (alpha_map_h - alpha_h_min) / (alpha_h_max - alpha_h_min)
+                images = {'alpha_map_i':alpha_map_i}
+                lbls =   {'alpha_map_i':'$\\huge{\\alpha_i \\in [%.02f,%.02f]}$'%(alpha_i_min, alpha_i_max)}
+            if('alpha_map_i' in val_output.model_output):
+                alpha_map_i = cv2.resize(val_output.model_output.llf_alpha_i.numpy()[0], (448,448))[None,...]
+                alpha_i_min = tf.reduce_min(alpha_map_i)
+                alpha_i_max = tf.reduce_max(alpha_map_i)
+                alpha_map_i = (alpha_map_i - alpha_i_min) / (alpha_i_max - alpha_i_min)
+                images = {'alpha_map_h':alpha_map_h}
+                lbls =   {'alpha_map_h':'$\\huge{\\alpha_h \\in [%.02f,%.02f]}$'%(alpha_h_min, alpha_h_max)}
             if(val_output.model_output.llf_guide is not None):
                 images.update({'llf_guide':val_output.model_output.llf_guide.numpy()})
                 lbls.update({'llf_guide':'I_h'})
