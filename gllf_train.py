@@ -12,7 +12,7 @@ from test import test
 # import net_ksz3
 import deepfnf
 import net_cheap as netCheap
-from net_laplacian_combine import Net as netLaplacianCombine
+# from net_laplacian_combine import Net as netLaplacianCombine
 # from net_no_change import NetNoChange as netNoChange
 from net_fft_combine import Net as netFFTCombine
 from net_flash_image import Net as netFlash
