@@ -1,51 +1,89 @@
 
-def CreateNetwork(opts):
-    
-    if(opts.model == 'deepfnf_llf_diffable'):
-        from net_llf_tf2_diffable import Net as netLLF
-        model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_overfit'):
-        from net_llf_tf2_local_alpha_overfitting import Net as net_overfit
-        model = net_overfit(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_alpha_map_unet'):
-        from net_llf_tf2_local_alpha_unet import Net as net_unet
-        model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_alpha_map_unet_v2'):
-        from net_llf_tf2_local_alpha_unet_v2 import Net as net_unet_v2
-        model = net_unet_v2(llf_sigma=opts.llf_sigma,alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_alpha_map_image_v2'):
-        from net_llf_tf2_local_alpha_overfitting_v2 import Net as net_image_v2
-        model = net_image_v2(llf_sigma=opts.llf_sigma,alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
-        from net_llf_tf2_local_alpha_unet import Net as net_unet
-        model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_alpha_map_image_tf'):
-        from net_llf_tf2_tf_local_alpha_overfitting import Net as net_unet
-        model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'net_llf_tf2_tf_local_alpha_unet'):
-        from net_llf_tf2_tf_local_alpha_unet import Net as net_unet
-        model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf'):
-        from net_llf_tf2_tf_local_alpha_Deepfnf import Net as net_deepfnf
-        model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf_alpha'):
-        from net_llf_tf2_tf_local_alpha_Deepfnf_alpha import Net as net_deepfnf
-        model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf_2alpha'):
-        from net_llf_tf2_tf_local_alpha_Deepfnf_2alpha import Net as net_deepfnf
-        model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_scalar_alpha_encoder'):
-        from net_llf_tf2_diffable_encoder import Net as net_unet
-        model = net_unet(llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_llf_scalar_alpha'):
-        from net_llf_tf2_diffable_scalar import Net as net_unet
-        model = net_unet(llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
-    elif(opts.model == 'deepfnf_refine_unet'):
-        from net_deepfnf_unet_refinement import Net as deepfnf_refine_net
-        model = deepfnf_refine_net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+import importlib
+import inspect
 
-    import net
-    deepfnf_model = net.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+def get_init_params(cls):
+    params = []
+    for p in list(inspect.signature(cls).parameters.values()):
+        params.append(p)
+    for cl in inspect.getmro(cls):
+        params += list(inspect.signature(cl).parameters.values())
+    return params
+
+def CreateNetwork(opts):
+
+    if(importlib.util.find_spec(opts.model) is None):
+        print("Could not find module ", opts.model)
+        exit(0)
+    
+    module = importlib.import_module(opts.model)
+    #iterate over parameters and pick them from options
+    params = {}
+    params_list = get_init_params(module.Net)
+    for p in params_list:
+        if(p.name == 'kargs'):
+            continue
+        if(p.name not in opts):
+            if(p.default):
+                params[p.name] = p.default
+            else:
+                print('Could not find ',p.name, ' in CLI parametes')
+                exit(0)
+        else:
+            params[p.name] = opts.__dict__[p.name]
+        
+    model = module.Net(**params)
+
+    # if(opts.model == 'deepfnf_llf_diffable'):
+    #     from net_llf_tf2_diffable import Net as netLLF
+    #     model = netLLF(opts.llf_alpha, opts.llf_beta, opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_overfit'):
+    #     from net_llf_tf2_local_alpha_overfitting import Net as net_overfit
+    #     model = net_overfit(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_alpha_map_unet'):
+    #     from net_llf_tf2_local_alpha_unet import Net as net_unet
+    #     model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_alpha_map_unet_v2'):
+    #     from net_llf_tf2_local_alpha_unet_v2 import Net as net_unet_v2
+    #     model = net_unet_v2(llf_sigma=opts.llf_sigma,alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_alpha_map_image_v2'):
+    #     from net_llf_tf2_local_alpha_overfitting_v2 import Net as net_image_v2
+    #     model = net_image_v2(llf_sigma=opts.llf_sigma,alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
+    #     from net_llf_tf2_local_alpha_unet import Net as net_unet
+    #     model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_alpha_map_image_tf'):
+    #     from net_llf_tf2_tf_local_alpha_overfitting import Net as net_unet
+    #     model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'net_llf_tf2_tf_local_alpha_unet'):
+    #     from net_llf_tf2_tf_local_alpha_unet import Net as net_unet
+    #     model = net_unet(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf'):
+    #     from net_llf_tf2_tf_local_alpha_Deepfnf import Net as net_deepfnf
+    #     model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf_alpha'):
+    #     from net_llf_tf2_tf_local_alpha_Deepfnf_alpha import Net as net_deepfnf
+    #     model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'net_llf_tf2_tf_local_alpha_Deepfnf_2alpha'):
+    #     from net_llf_tf2_tf_local_alpha_Deepfnf_2alpha import Net as net_deepfnf
+    #     model = net_deepfnf(alpha_width=opts.alpha_width, alpha_height=opts.alpha_height, llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_scalar_alpha_encoder'):
+    #     from net_llf_tf2_diffable_encoder import Net as net_unet
+    #     model = net_unet(llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_llf_scalar_alpha'):
+    #     from net_llf_tf2_diffable_scalar import Net as net_unet
+    #     model = net_unet(llf_beta=opts.llf_beta, llf_levels=opts.llf_levels, ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor,lmbda=opts.lmbda)
+    # elif(opts.model == 'deepfnf_refine_unet'):
+    #     from net_deepfnf_unet_refinement import Net as deepfnf_refine_net
+    #     model = deepfnf_refine_net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    # elif(opts.model == 'deepfnf'):
+    #     from net import Net as deepfnf
+    #     model = deepfnf(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+    # import net
+    deepfnf_model = None
+    if(opts.double_network):
+        from deepfnf import Net as deepfnf
+        deepfnf_model = deepfnf(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     return model, deepfnf_model
 
 def composite_centered_numpy(small_image, large_image, x, y):

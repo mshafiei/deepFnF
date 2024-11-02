@@ -284,15 +284,15 @@ def combineFNFInFT(flash,denoise,x0,k):
     return combined, flash_ift, blurred_ift, kernel_ft
 
 
-def get_psnr(pred, gt):
+def get_psnr(pred, gt,mse=None):
     pred = tf.clip_by_value(pred, 0., 1.)
     gt = tf.clip_by_value(gt, 0., 1.)
-    mse = tf.reduce_mean((pred - gt)**2.0, axis=[1, 2, 3])
+    mse = tf.reduce_mean((pred - gt)**2.0, axis=[1, 2, 3]) if mse is None else mse
     psnr = tf.reduce_mean(-10. * tf.math.log(mse) / tf.math.log(10.))
     return psnr
 
 
-def apply_filtering(imgs, kernels):
+def apply_filtering(imgs, kernels, framewise_op=False):
     b, h, w, c = imgs.get_shape().as_list()
     burst_length = c // 3
     b = tf.shape(imgs)[0]
@@ -305,12 +305,15 @@ def apply_filtering(imgs, kernels):
     patches = tf.reshape(patches, [b, h, w, ksz * ksz, burst_length * 3])
     kernels = tf.reshape(kernels, [b, h, w, ksz * ksz, burst_length * 3])
     framewise = tf.reduce_sum(patches * kernels, axis=-2)
-    framewise = tf.reshape(framewise, [b, h, w, burst_length, 3])
-    out = tf.reduce_sum(framewise, axis=-2)
+    if(framewise_op):
+      out = framewise
+    else:
+      framewise = tf.reshape(framewise, [b, h, w, burst_length, 3])
+      out = tf.reduce_sum(framewise, axis=-2)
     return out
 
 
-def apply_dilated_filtering(imgs, kernels, dilation=1):
+def apply_dilated_filtering(imgs, kernels, dilation=1, framewise_op=False):
     b, h, w, c = imgs.get_shape().as_list()
     burst_length = c // 3
     b = tf.shape(imgs)[0]
@@ -325,8 +328,11 @@ def apply_dilated_filtering(imgs, kernels, dilation=1):
     patches = tf.reshape(patches, [b, h, w, ksz * ksz, burst_length * 3])
     kernels = tf.reshape(kernels, [b, h, w, ksz * ksz, burst_length * 3])
     framewise = tf.reduce_sum(patches * kernels, axis=-2)
-    framewise = tf.reshape(framewise, [b, h, w, burst_length, 3])
-    out = tf.reduce_sum(framewise, axis=-2)
+    if(framewise_op):
+      out = framewise
+    else:
+      framewise = tf.reshape(framewise, [b, h, w, burst_length, 3])
+      out = tf.reduce_sum(framewise, axis=-2)
     return out
 
 def bilinear_filter_precompute(ksz,nchannel=3):

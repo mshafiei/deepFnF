@@ -21,7 +21,7 @@ import utils.np_utils as npu
 import numpy as np
 from test import test
 import net_ksz3
-import net
+import deepfnf
 import net_cheap as netCheap
 from net_laplacian_combine import Net as netLaplacianCombine
 from net_no_change import NetNoChange as netNoChange
@@ -124,7 +124,7 @@ def CreateNetwork(opts):
         model = net_ksz3.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf'):
         # model = netCheap.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
-        model = net.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
+        model = deepfnf.Net(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'deepfnf-slim'):
         model = NetSlim(ksz=opts.ksz, num_basis=opts.num_basis, burst_length=2,channels_count_factor=opts.channels_count_factor)
     elif(opts.model == 'unet_llf'):

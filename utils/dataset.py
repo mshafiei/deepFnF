@@ -115,6 +115,23 @@ def gen_homography(
     return example
 
 
+def gen_homography_no_warp(
+        example, jitter, min_scale, max_scale, theta, is_val=True):
+    '''Randomly warp the image'''
+    ambient = tf.clip_by_value(example['ambient'], 0., 1.)
+    flash_only = tf.clip_by_value(example['flash_only'], 0., 1.)
+
+    # due to numerical issue, might be values that are slightly larger than 1.0
+    example['warped_flash_only'] = tf.clip_by_value(flash_only, 0., 1.)
+
+    example['warped_ambient'] = tf.clip_by_value(ambient, 0., 1.)
+
+    example['ambient'] = ambient
+    example['flash_only'] = flash_only
+
+    return example
+
+
 def gen_random_params(
         example, min_alpha=0.02, max_alpha=0.2,
         min_read=-3., max_read=-2, min_shot=-2., max_shot=-1.3):
@@ -143,10 +160,10 @@ class Dataset:
             self, train_list, val_path,
             bsz=32, psz=512, jitter=2,
             min_scale=0.98, max_scale=1.02, theta=np.deg2rad(0.5),
-            ngpus=1, nthreads=4, onfly_val=False,displacement=True):
+            ngpus=1, nthreads=4, onfly_val=False,displacement=True,crop=True):
         self.train = TrainSet(
             train_list, bsz, psz, jitter,
-            min_scale, max_scale, theta, ngpus, nthreads)
+            min_scale, max_scale, theta, ngpus, nthreads, crop)
         if onfly_val:
             self.val = _OnFlyValSet(
                 val_path, bsz, psz, jitter, min_scale, 
@@ -188,12 +205,17 @@ class Dataset:
 class TrainSet:
     def __init__(
             self, file_list, bsz, psz, jitter,
-            min_scale, max_scale, theta, ngpus, nthreads):
+            min_scale, max_scale, theta, ngpus, nthreads,crop):
         files = [l.strip() for l in open(file_list)]
 
-        gen_homography_fn = functools.partial(
-            gen_homography, jitter=jitter, min_scale=min_scale,
-            max_scale=max_scale, theta=theta, psz=psz)
+        if(crop):
+            gen_homography_fn = functools.partial(
+                gen_homography, jitter=jitter, min_scale=min_scale,
+                max_scale=max_scale, theta=theta, psz=psz)
+        else:
+            gen_homography_fn = functools.partial(
+                gen_homography_no_warp, jitter=jitter, min_scale=min_scale,
+                max_scale=max_scale, theta=theta)
 
         # gen_random_params_fn = functools.partial(
         #     gen_random_params, min_alpha=0.9999, max_alpha=1.0001,

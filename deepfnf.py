@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 import utils.tf_utils as tfu
-
+from easydict import EasyDict as edict
 
 class Net:
     def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
@@ -196,6 +196,9 @@ class Net:
         self.activations['decoding'] = self.kernels
 
     def forward(self, inp):
+        inp_is_edict = type(inp) == edict
+        if(inp_is_edict):
+            inp = inp.net_ft_input
         self.predict_coeff(inp)
         self.create_basis()
         self.combine()
@@ -213,5 +216,9 @@ class Net:
             smoothed_ambient, self.kernels[..., 1], dilation=4)
         filtered_ambient = filtered_ambient + smoothed_ambient
         denoised = filtered_ambient * self.scale
-
-        return denoised
+        if(inp_is_edict):
+            output=edict()
+            output.output = denoised
+            return output
+        else:
+            return denoised

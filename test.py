@@ -10,8 +10,8 @@ import utils.utils as ut
 import utils.tf_utils as tfu
 import tqdm
 import time
-from bilateral import bilateralFilter, bilateralSolve
-from BilateralParallel import bilateral_rgb
+# from bilateral import bilateralFilter, bilateralSolve
+# from BilateralParallel import bilateral_rgb
 import cvgutils.Linalg as Linalg
 import cvgutils.Viz as viz
 from timeit import default_timer as timer
@@ -162,7 +162,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         params['NUM_NEIGHBORS'] = logger.opts.bilateral_neighbors
         params['bs_lam'] = logger.opts.bs_lam
         # denoise = bilateral_rgb(flash_wb, denoise,flash_wb*0 + 1, params)
-        denoise = bilateralFilter(denoise,flash_wb,params)
+        # denoise = bilateralFilter(denoise,flash_wb,params)
     
     denoise = np.clip(denoise, 0., 1.).squeeze()
     ambient = np.clip(ambient, 0., 1.).squeeze()
