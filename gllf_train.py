@@ -345,21 +345,21 @@ with tf.device('/gpu:0'):
                 images.update({'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0]})
                 lbls.update({'denoised_deepfnf':'DeepFnF'})
             if('alpha_map_h' in val_output.model_output):
-                alpha_map_h = cv2.resize(val_output.model_output.llf_alpha_h.numpy()[0], (448,448))[None,...]
+                alpha_map_h = cv2.resize(val_output.model_output.alpha_map_h.numpy()[0], (448,448))[None,...]
                 # gllf = gllf.numpy()[0] * 2.0**exposure
                 annotation =  None if opts.llf_sigma == 0 else annotation
                 alpha_h_min = tf.reduce_min(alpha_map_h)
                 alpha_h_max = tf.reduce_max(alpha_map_h)
                 alpha_map_h = (alpha_map_h - alpha_h_min) / (alpha_h_max - alpha_h_min)
-                images = {'alpha_map_i':alpha_map_i}
-                lbls =   {'alpha_map_i':'$\\huge{\\alpha_i \\in [%.02f,%.02f]}$'%(alpha_i_min, alpha_i_max)}
+                images.update({'alpha_map_h':alpha_map_h})
+                lbls.update({'alpha_map_h':'$\\huge{\\alpha_h \\in [%.02f,%.02f]}$'%(alpha_h_min, alpha_h_max)})
             if('alpha_map_i' in val_output.model_output):
-                alpha_map_i = cv2.resize(val_output.model_output.llf_alpha_i.numpy()[0], (448,448))[None,...]
+                alpha_map_i = cv2.resize(val_output.model_output.alpha_map_i.numpy()[0], (448,448))[None,...]
                 alpha_i_min = tf.reduce_min(alpha_map_i)
                 alpha_i_max = tf.reduce_max(alpha_map_i)
                 alpha_map_i = (alpha_map_i - alpha_i_min) / (alpha_i_max - alpha_i_min)
-                images = {'alpha_map_h':alpha_map_h}
-                lbls =   {'alpha_map_h':'$\\huge{\\alpha_h \\in [%.02f,%.02f]}$'%(alpha_h_min, alpha_h_max)}
+                images.update({'alpha_map_i':alpha_map_h})
+                lbls.update({'alpha_map_i':'$\\huge{\\alpha_i \\in [%.02f,%.02f]}$'%(alpha_i_min, alpha_i_max)})
             if("llf_guide" in val_output.model_output):
                 images.update({'llf_guide':val_output.model_output.llf_guide.numpy()})
                 lbls.update({'llf_guide':'I_h'})

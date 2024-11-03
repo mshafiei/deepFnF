@@ -56,13 +56,17 @@ class Net(deepfnf2):
         filtered_images = filtered_images + smoothed_images
         filtered_ambient = filtered_images[...,:3]
         filtered_flash = filtered_images[...,3:]
-        return self.llf(filtered_ambient, filtered_flash, filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i)
+        return self.llf(filtered_ambient, filtered_flash, filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i), filtered_ambient, filtered_flash
         # return self.llf(filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i)
 
     @tf.function
     def forward(self, inputs):
         outputs = edict()
-        denoised_flash = self.filter_flash_ambient(inputs.net_ft_input)
+        denoised_flash, filtered_ambient, filtered_flash = self.filter_flash_ambient(inputs.net_ft_input)
         
         outputs.output = denoised_flash
+        outputs.alpha_map_i = self.llf_alpha_i
+        outputs.alpha_map_h = self.llf_alpha_h
+        outputs.llf_input = filtered_ambient
+        outputs.llf_guide = filtered_flash
         return outputs
