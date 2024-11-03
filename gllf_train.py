@@ -73,6 +73,7 @@ MAXITER = 1.5e6
 displacement = opts.displacement
 VALFREQ = opts.val_freq
 SAVEFREQ = opts.save_freq
+SAVEFREQ_RARE = opts.save_freq_rare
 wts = weight_dir
 
 if not os.path.exists(wts):
@@ -321,6 +322,12 @@ with tf.device('/gpu:0'):
             store = {}
             opt.save_own_variables(store)
             fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter)
+            print("Saving model to " + fn1 + " and " + fn2 +" with loss ",float(losses['loss'].numpy()))
+            # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
+        if SAVEFREQ > 0 and niter % SAVEFREQ_RARE == 0:
+            store = {}
+            opt.save_own_variables(store)
+            fn1, fn2 = logger.save_params(model.weights, {'configs':opt.get_config(), 'variables':store},niter,suffix="rare_%i"%niter)
             print("Saving model to " + fn1 + " and " + fn2 +" with loss ",float(losses['loss'].numpy()))
             # print('dumping params ',model.weights['down2_1_w'][0,0,0,0])
 
