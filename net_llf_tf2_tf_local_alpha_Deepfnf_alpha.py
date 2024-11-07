@@ -75,9 +75,9 @@ class Net(NetAlpha):
         #     llf_alpha = llf_alpha
         # return denoised_flash_scaled, denoised, denoised_flash_scaled, flash
         # return self.llf(denoised, denoised_flash_scaled, 1), denoised, denoised_flash_scaled, self.llf_alpha
-        outputs.gllf_out = self.llf(denoised, denoised_flash_scaled, denoised, flash, self.llf_alpha, 0)
+        outputs.output = self.llf(denoised, denoised_flash_scaled, denoised, flash, self.llf_alpha, 0)
         outputs.llf_input = denoised
         outputs.llf_guide = denoised_flash_scaled
         outputs.llf_alpha_h = self.llf_alpha
-        return dict(outputs)
+        return outputs
         # return self.llf(denoised, denoised_flash_scaled, denoised, denoised_flash_scaled, 1), denoised, denoised_flash_scaled, denoised_flash_scaled
