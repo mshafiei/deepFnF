@@ -59,6 +59,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--latexName', default="N/A", type=str,help='Latex name of the experiment')
     parser.add_argument('--model', type=str,default='deepfnf',help='Neural network model')
     parser.add_argument('--clamp_dataset', type=str_to_bool,default=False,help='Neural network model')
+    parser.add_argument('--skip_no_insets', type=str_to_bool,default=False,help='Neural network model')
     parser.add_argument('--std_input', type=str_to_bool,default=True,help='Neural network model')
     parser.add_argument('--scalemap', type=str_to_bool,default=True,nargs='?', const=True,help='Use scalemap?')
     parser.add_argument('--separate_images', type=str_to_bool,default=False,nargs='?', const=True,help='export images separately or all together')
