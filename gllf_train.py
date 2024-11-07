@@ -231,6 +231,16 @@ with tf.device('/gpu:0'):
     def predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example, double_network=True):
         output = edict()
         losses = edict()
+        output.noisy_ambient =  tfu.camera_to_rgb(
+            noisy_ambient / alpha, example['color_matrix'], example['adapt_matrix'])
+
+        output.noisy_flash_scaled = tfu.camera_to_rgb(
+            noisy_flash, example['color_matrix'], example['adapt_matrix'])
+        
+        output.ambient_scaled= tfu.camera_to_rgb(
+            example['ambient'],
+            example['color_matrix'], example['adapt_matrix'])
+
         if(double_network):
             output.denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
             net_ft_input = tf.concat((net_input, output.denoise), axis=-1)
@@ -244,16 +254,6 @@ with tf.device('/gpu:0'):
             losses.lpips_deepfnf = lpips_deepfnf
         else:
             net_ft_input = net_input
-        
-        output.noisy_ambient =  tfu.camera_to_rgb(
-            noisy_ambient / alpha, example['color_matrix'], example['adapt_matrix'])
-
-        output.noisy_flash_scaled = tfu.camera_to_rgb(
-            noisy_flash, example['color_matrix'], example['adapt_matrix'])
-        
-        output.ambient_scaled= tfu.camera_to_rgb(
-            example['ambient'],
-            example['color_matrix'], example['adapt_matrix'])
 
         output.net_ft_input = net_ft_input
         output.color_matrix = example['color_matrix']
