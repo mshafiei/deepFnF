@@ -28,7 +28,7 @@ export CUDA_VISIBLE_DEVICES=""
 fi
 
 cd /mshvol2/users/mohammad/optimization/deepfnf_fork
-pip3 install imageio easydict
+pip3 install imageio easydict tensorflow-probability tf-keras tensorflow==2.17.0
 python3 -c """import imageio
 imageio.plugins.freeimage.download()
 """
