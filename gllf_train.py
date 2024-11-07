@@ -392,7 +392,7 @@ with tf.device('/gpu:0'):
             losses.update(additional_loss)
             [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
         if(niter == 0 or niter % logger.opts.print_val_freq == 0):
-            additional_loss, _ = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example, double_network, frequent=True)
+            additional_loss, _ = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example, double_network, validation=False)
             losses.update(additional_loss)
             [logger.addScalar(float(v.numpy()),k) for k, v in losses.items()]
 
