@@ -12,12 +12,11 @@ from gllf import gllf, _resize
 from easydict import EasyDict as dotmap
 
 class Net(NetAlpha):
-    def __init__(self, normalize_before_gllf, **kargs):
+    def __init__(self, **kargs):
         super().__init__(**kargs)
         assert self.alpha_height == self.alpha_width
         assert self.IMSZ % self.alpha_width == 0
         self.alpha_is_scalar = self.alpha_width == 1
-        self.normalize_before_gllf = normalize_before_gllf
         if(not self.alpha_is_scalar):
             self.layers_count = np.floor(5.0 - np.log2(self.IMSZ // self.alpha_width))
         
@@ -57,31 +56,28 @@ class Net(NetAlpha):
     def forward(self, inputs_dict):
         inputs = dotmap(inputs_dict)
         outputs = dotmap()
+        flash = inputs.noisy_flash_scaled
+        denoised = inputs.deepfnf_scaled
+        color_matrix = inputs.color_matrix
+        adapt_matrix = inputs.adapt_matrix
         denoised_flash = self.filter_flash(inputs.net_ft_input)
-        if(self.normalize_before_gllf):
-            denoised_flash_min, denoised_flash_max = tf.reduce_min(denoised_flash), tf.reduce_max(denoised_flash)
-            denoise_min, denoise_max = tf.reduce_min(inputs.denoise), tf.reduce_max(inputs.denoise)
-            noisy_flash_min, noisy_flash_max = tf.reduce_min(inputs.noisy_flash), tf.reduce_max(inputs.noisy_flash)
-            gllf_guide = (denoised_flash - denoised_flash_min) / (denoised_flash_max - denoised_flash_min)
-            gllf_denoised = (inputs.denoise - denoise_min) / (denoise_max - denoise_min)
-            gllf_guide_pyramid = (inputs.noisy_flash - noisy_flash_min) / (noisy_flash_max - noisy_flash_min)
-        else:
-            color_matrix = inputs.color_matrix
-            adapt_matrix = inputs.adapt_matrix
-            gllf_guide_pyramid = inputs.noisy_flash_scaled
-            gllf_denoised = inputs.deepfnf_scaled
-            gllf_guide = tfu.camera_to_rgb(
-                denoised_flash, color_matrix, adapt_matrix)
-
-        outputs.output = self.llf(gllf_denoised, gllf_guide, gllf_denoised, gllf_guide_pyramid, self.llf_alpha, 0)
-        if(self.normalize_before_gllf):
-            gllf_guide = gllf_guide * (denoised_flash_max - denoised_flash_min) + denoised_flash_min
-            gllf_denoised = gllf_denoised * (denoise_max - denoise_min) + denoise_min
-            gllf_guide_pyramid = gllf_guide_pyramid * (noisy_flash_max - noisy_flash_min) + noisy_flash_min
-            outputs.output = outputs.output * (denoised_flash_max - denoised_flash_min) + denoised_flash_min
-
-        outputs.llf_input = gllf_denoised
-        outputs.llf_guide = gllf_guide
+        
+        denoised_flash_scaled = tfu.camera_to_rgb(
+            denoised_flash, color_matrix, adapt_matrix)
+        # denoised_flash_scaled = self.unet(inputs.net_ft_input)
+        # # denoised_flash_scaled = flash
+        # llf_alpha = self.unet(inp)
+        # h, w = denoised.shape[1:3]
+        # ah, aw = llf_alpha.shape[1:3]
+        # if(h > ah):
+        #     llf_alpha = _resize(llf_alpha, (w, h))
+        # else:
+        #     llf_alpha = llf_alpha
+        # return denoised_flash_scaled, denoised, denoised_flash_scaled, flash
+        # return self.llf(denoised, denoised_flash_scaled, 1), denoised, denoised_flash_scaled, self.llf_alpha
+        outputs.output = denoised + denoised_flash_scaled
+        outputs.llf_input = denoised
+        outputs.llf_guide = denoised_flash
         outputs.llf_alpha_h = self.llf_alpha
         return outputs
-        
+        # return self.llf(denoised, denoised_flash_scaled, denoised, denoised_flash_scaled, 1), denoised, denoised_flash_scaled, denoised_flash_scaled

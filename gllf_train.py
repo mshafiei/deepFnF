@@ -218,13 +218,19 @@ with tf.device('/gpu:0'):
         
         outputs.noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, example['color_matrix'], example['adapt_matrix'])
+
+        outputs.noisy_flash = tfu.camera_to_rgb(
+            noisy_flash, example['color_matrix'], example['adapt_matrix'])
         
         outputs.ambient_scaled= tfu.camera_to_rgb(
             example['ambient'],
             example['color_matrix'], example['adapt_matrix'])
         
-        model_input.update(edict(net_ft_input=outputs.net_ft_input, noisy_flash_scaled=outputs.noisy_flash_scaled, color_matrix=example['color_matrix'], adapt_matrix=example['adapt_matrix']))
+        model_input.update(edict(noisy_flash=outputs.noisy_flash, net_ft_input=outputs.net_ft_input, noisy_flash_scaled=outputs.noisy_flash_scaled, color_matrix=example['color_matrix'], adapt_matrix=example['adapt_matrix']))
         outputs.model_output = model.forward(model_input)
+        if(logger.opts.normalize_before_gllf):
+            outputs.model_output.output = tfu.camera_to_rgb(
+            outputs.model_output.output / alpha, example['color_matrix'], example['adapt_matrix'])
         return outputs, model_input
 
 
@@ -234,7 +240,10 @@ with tf.device('/gpu:0'):
         losses = edict()
         output.noisy_ambient =  tfu.camera_to_rgb(
             noisy_ambient / alpha, example['color_matrix'], example['adapt_matrix'])
-
+        
+        output.noisy_flash = tfu.camera_to_rgb(
+            noisy_flash, example['color_matrix'], example['adapt_matrix'])
+        
         output.noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, example['color_matrix'], example['adapt_matrix'])
         
@@ -264,6 +273,9 @@ with tf.device('/gpu:0'):
         output.color_matrix = example['color_matrix']
         output.adapt_matrix = example['adapt_matrix']
         double_deepfnf = model.forward(output)
+        if(logger.opts.normalize_before_gllf):
+            double_deepfnf.output = tfu.camera_to_rgb(
+            double_deepfnf.output / alpha, example['color_matrix'], example['adapt_matrix'])
 
         if(validation):
             wlpips_refined = wlpips([double_deepfnf.output, output.ambient_scaled])
@@ -283,6 +295,8 @@ with tf.device('/gpu:0'):
         model_inputs.noisy_ambient_scaled =  tfu.camera_to_rgb(noisy_ambient / alpha,
         example['color_matrix'], example['adapt_matrix'])
 
+        model_inputs.noisy_flash = noisy_flash
+
         model_inputs.noisy_flash_scaled = tfu.camera_to_rgb(noisy_flash,
         example['color_matrix'], example['adapt_matrix'])
         
@@ -292,8 +306,9 @@ with tf.device('/gpu:0'):
         if(double_network):
             model_inputs.denoise = deepfnf_model.forward(net_input)
             net_ft_input = tf.concat((net_input, model_inputs.denoise), axis=-1)
+        
             model_inputs.deepfnf_scaled = tfu.camera_to_rgb(
-            model_inputs.denoise / alpha, example['color_matrix'], example['adapt_matrix'])
+                model_inputs.denoise / alpha, example['color_matrix'], example['adapt_matrix'])
         else:
             net_ft_input = net_input
         
@@ -304,6 +319,11 @@ with tf.device('/gpu:0'):
         
         with tf.GradientTape() as tape:
             double_deepfnf = model.forward(model_inputs)
+            if(logger.opts.normalize_before_gllf):
+                double_deepfnf.output = tfu.camera_to_rgb(double_deepfnf.output / alpha,
+                        example['color_matrix'], example['adapt_matrix'])
+            # double_deepfnf.output = tfu.camera_to_rgb(double_deepfnf.output,
+            # example['color_matrix'], example['adapt_matrix'])
             # Loss
             l2_loss = tf.convert_to_tensor(0.0) if opts.l2 == 0 else tfu.l2_loss(double_deepfnf.output, model_inputs.ambient_scaled)
             gradient_loss = tf.convert_to_tensor(0.0) if opts.grad == 0 else tfu.gradient_loss(double_deepfnf.output, model_inputs.ambient_scaled)
@@ -312,6 +332,11 @@ with tf.device('/gpu:0'):
             
             # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
             loss = opts.l2 * l2_loss + opts.grad * gradient_loss + opts.lpips * lpips_loss + opts.wlpips * wlpips_loss
+        
+        double_deepfnf.llf_input = tfu.camera_to_rgb(double_deepfnf.llf_input,
+            example['color_matrix'], example['adapt_matrix'])
+        double_deepfnf.llf_guide = tfu.camera_to_rgb(double_deepfnf.llf_guide,
+            example['color_matrix'], example['adapt_matrix'])
 
         gradients = tape.gradient(loss, model.weights.values())
         # tf.print(gradients)
