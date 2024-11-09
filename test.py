@@ -96,7 +96,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     elif(logger.opts.model == 'deepfnf_combine_laplacian_pixelwise'):
         denoise = eval_model_w_alpha(model, net_input, data['alpha'])
         laplacianWeights = model.getLaplacianWeights()
-    elif(logger.opts.model == "net_llf_tf2_tf_local_alpha_Deepfnf_alpha" or logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
+    elif(logger.opts.model == "net_llf_tf2_tf_Deepfnf_Deepfnf_flash" or logger.opts.model == "net_llf_tf2_tf_local_alpha_Deepfnf_alpha" or logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
         # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
         denoised_deepfnf = model.deepfnf_model.forward(net_input)
         deepfnf_scaled = tfu.camera_to_rgb(
@@ -111,7 +111,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         inputs.color_matrix = data['color_matrix']
         inputs.adapt_matrix = data['adapt_matrix']
         model_output = dotmap(model.forward(inputs))
-        denoise, alpha_map = model_output.gllf_out, model_output.llf_alpha_h[0]
+        denoise, alpha_map = model_output.output, model_output.llf_alpha_h[0]
         gllf_guide = model_output.llf_guide
     else:
         denoise = eval_model(model, net_input)
