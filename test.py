@@ -123,7 +123,7 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     # denoise = noisy_flash
     ambient = tfu.camera_to_rgb(
         ambient, data['color_matrix'], data['adapt_matrix'])
-    if(logger.opts.model != 'deepfnf_llf_alpha_map_unet' and logger.opts.model != 'deepfnf_llf_alpha_map_unet_v2' and logger.opts.model != 'net_llf_tf2_tf_local_alpha_Deepfnf_alpha'):
+    if(logger.opts.model != 'net_llf_tf2_tf_Deepfnf_Deepfnf_flash' and logger.opts.model != 'deepfnf_llf_alpha_map_unet' and logger.opts.model != 'deepfnf_llf_alpha_map_unet_v2' and logger.opts.model != 'net_llf_tf2_tf_local_alpha_Deepfnf_alpha'):
         denoise = denoise / alpha
         denoise = tfu.camera_to_rgb(
             denoise, data['color_matrix'], data['adapt_matrix'])
@@ -197,7 +197,10 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     for key,v in metrics.items():
         if('spatial' not in key):
             metrics_list[levelKey][key].append(np.array(v).item())
-            
+    # for key, v in metrics_list.items():
+    #     if('psnr' in key.lower() or 'wlpips' == key.lower() or 'lpips' == key.lower()):
+    #         print(key,':',v)
+
     #draw laplacian interpolation function
     kernel, inv_kernel = tfu.sigmoid(logger.opts.sigmoid_offset,logger.opts.sigmoid_intensity,[448,448])
     kernel = np.repeat(np.array(tf.signal.fftshift(kernel))[:,:,None],3,axis=-1)
