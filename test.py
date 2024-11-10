@@ -50,13 +50,10 @@ def update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKe
     errors[levelKey] = ', '.join(errstr)
     print('mean error: ', errors[levelKey])
     
-def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval):
-    levelKey = 'Level %d' % (6 - k)
+def test_idx(datapath,data,k,c,logger,model):
     npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
-    data = np.load(npz_fn)
-    alpha = data['alpha'][None, None, None, None].astype(np.float32)
+    alpha = tf.squeeze(data['alpha']).numpy().astype(np.float32)
     print('alpha ', alpha, ' npz ', npz_fn)
-    ambient = data['ambient']
     dimmed_ambient, _ = tfu.dim_image(data['ambient'], alpha=alpha)
     dimmed_warped_ambient, _ = tfu.dim_image(
         data['warped_ambient'], alpha=alpha)
@@ -76,12 +73,8 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
     net_input = tf.concat([noisy, noise_std], axis=-1)
     
     
-    denoise_original = None
-    laplacian_pyramid = None
-    denoise_original_deepfnf = None
-    alpha_map = None
     deepfnf_scaled = None
-    gllf_guide = None
+    model_output = dotmap()
     start = timer()
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
@@ -111,15 +104,38 @@ def test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, 
         inputs.color_matrix = data['color_matrix']
         inputs.adapt_matrix = data['adapt_matrix']
         model_output = dotmap(model.forward(inputs))
-        denoise, alpha_map = model_output.output, model_output.llf_alpha_h[0]
+        model_output.denoise, model_output.alpha_map = model_output.output, model_output.llf_alpha_h[0]
+        model_output.deepfnf_scaled = inputs.deepfnf_scaled
         gllf_guide = model_output.llf_guide
     else:
         denoise = eval_model(model, net_input)
     end = timer()
     running_time = int((end - start)*1000)
-    print('forward pass takes ', running_time, 'ms')
+    model_output.denoised_deepfnf = denoised_deepfnf
 
+    model_output.noisy_flash_scaled = tfu.camera_to_rgb(
+            noisy_flash, data['color_matrix'], data['adapt_matrix'])
+    model_output.noisy_ambient_scaled = tfu.camera_to_rgb(
+            noisy_ambient / alpha, data['color_matrix'], data['adapt_matrix'])
+    model_output.ambient_scaled = tfu.camera_to_rgb(
+            data['ambient'], data['color_matrix'], data['adapt_matrix'])
+    # model_output.denoised_deepfnf
+    print('forward pass takes ', running_time, 'ms')
+    return k,c, logger, model_output, datapath, running_time, model
     
+def visualize(data,k,c, logger, errval, metrics, metrics_list, errors_dict,errors,denoised_deepfnf, datapath, running_time, model):
+    levelKey = 'Level %d' % (6 - k)
+    ambient = data['ambient']
+    alpha = tf.squeeze(data['alpha']).astype(np.float32)
+    noisy_ambient = data['noisy_ambient']
+    noisy_flash = data['noisy_flash']
+    deepfnf_scaled = tfu.camera_to_rgb(
+            denoised_deepfnf / tf.squeeze(alpha), data['color_matrix'], data['adapt_matrix'])
+    denoise_original = None
+    laplacian_pyramid = None
+    denoise_original_deepfnf = None
+    alpha_map = None
+    gllf_guide = None
     # denoise = noisy_flash
     ambient = tfu.camera_to_rgb(
         ambient, data['color_matrix'], data['adapt_matrix'])
@@ -320,10 +336,99 @@ def test(model, model_path, datapath,logger):
                 update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
                 logger.dumpDictJson(errors_dict,'test_errors','test')
             for c in tqdm.trange(startc,logger.opts.test_set_count,1):
-                with tf.device('/gpu:0'):
-                    test_idx(datapath,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
-                    logger.dumpDictJson(metrics_list,'test_errors_samples','test')
-                    logger.dumpDictJson(errors_dict,'test_errors','test')
+                #if large image, loop over 448x448 patches
+                levelKey = 'Level %d' % (6 - k)
+                npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
+                inset_fn = '%03d_%03d.npz' % (k, c)
+                data = np.load(npz_fn,allow_pickle=True)
+                if(logger.opts.large_images):
+                    if(logger.insets_json is not None):
+                        fn_exists = False
+                        for key in logger.insets_json['insets'].keys():
+                            fn_exists = fn_exists or key in inset_fn
+                    if(not fn_exists):
+                        continue
+                        
+                    h, w = data['ambient'][0,:,:,0].shape
+                    data_cropped = {}
+                    results_cropped = {}
+                    input_keys = list(data.files)
+                    w_iter_ct = w//448+1
+                    h_iter_ct = h//448+1
+                    pad_w = 448 - (w % 448)
+                    pad_h = 448 - (h % 448)
+
+                    for j in range(w_iter_ct):
+                        results_cropped_h = {}
+                        for i in range(h_iter_ct):
+                            for key in input_keys:
+                                if(len(data[key].shape) == 4):
+                                    data_cropped[key] = np.array(data[key][:,i*448:(i+1)*448,j*448:(j+1)*448,:])
+                                    res_w, res_h = 0, 0
+                                    if(j == w_iter_ct-1):
+                                        res_w = pad_w
+                                    if(i == h_iter_ct-1):
+                                        res_h = pad_h
+                                    data_cropped[key] = tf.pad(data_cropped[key], [[0,0],[0,res_h],[0,res_w],[0,0]])
+                                else:
+                                    data_cropped[key] = data[key]
+                            #Process images and get model results
+                            k,c, logger, results_cropped_ij, datapath, running_time, model = test_idx(datapath,data_cropped,k,c,logger,model)
+                            results_cropped_ij.update(data_cropped)
+                            #concatenate results
+                            for key in results_cropped_ij.keys():
+                                if(len(results_cropped_ij[key].shape) != 4):
+                                    continue
+                                if(key not in results_cropped_h.keys()):
+                                    results_cropped_h[key] = [results_cropped_ij[key]]
+                                else:
+                                    results_cropped_h[key].append(results_cropped_ij[key])
+                        for key in results_cropped_h.keys():
+                            if(len(results_cropped_h[key][0].shape) != 4):
+                                continue
+                            concat_image = tf.concat(results_cropped_h[key],axis=1)
+                            if(key not in results_cropped.keys()):
+                                results_cropped[key] = [concat_image]
+                            else:
+                                results_cropped[key].append(concat_image)
+                    for key in results_cropped_h.keys():
+                        if(len(results_cropped_h[key][0].shape) != 4):
+                            continue
+                        results_cropped[key] = tf.concat(results_cropped[key],axis=2)[:,:h,:w,:]
+                    large_images = {}
+                    lbl = {}
+                    for key in results_cropped.keys():
+                        if(len(results_cropped[key].shape) == 4):
+                            large_images[key] = results_cropped[key]
+                            lbl[key] = key
+                    #Apply scale to all images
+                    #return all images from process function
+                    # model_output.noisy_flash_scaled = tfu.camera_to_rgb(
+                    #         noisy_flash, data['color_matrix'], data['adapt_matrix'])
+                    # model_output.noisy_ambient_scaled = tfu.camera_to_rgb(
+                    #         noisy_ambient / alpha, data['color_matrix'], data['adapt_matrix'])
+                    # model_output.ambient_scaled = tfu.camera_to_rgb(
+                    #         data['ambient'], data['color_matrix'], data['adapt_matrix'])
+                    order_keys = ['noisy_flash_scaled','noisy_ambient_scaled','ambient_scaled','deepfnf_scaled','output','llf_input','llf_guide','llf_alpha_h','llf_alpha_i']
+                    ordered_dict = {}
+                    ordered_labels = {}
+                    for key in order_keys:
+                        if(key in large_images.keys()):
+                            ordered_dict[key] = large_images[key]
+                            ordered_labels[key] = key
+                    logger.addImage(ordered_dict,ordered_labels,'deepfnf',dim_type='HWC',cols=6,mode='test',idx='%03i_%03i'%(k,c), image_filename=str(inset_fn), vertical_spacing_scale=3)
+                    #Visualize
+                    # visualize(results_cropped,k,c, logger, errval, metrics, metrics_list, errors_dict,errors,denoised_deepfnf, datapath, running_time, model)
+                    print('hi')
+
+                    #pad flash, ambient, noisy, std
+                    #process w/ the model
+                    #concatenate
+                else:
+                    with tf.device('/gpu:0'):
+                        test_idx(datapath,data,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
+                        logger.dumpDictJson(metrics_list,'test_errors_samples','test')
+                        logger.dumpDictJson(errors_dict,'test_errors','test')
                     
     else:
         metrics = {}
