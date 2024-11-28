@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from net import Net as OriginalNet
+from deepfnf import Net as OriginalNet
 
 import numpy as np
 import tensorflow as tf

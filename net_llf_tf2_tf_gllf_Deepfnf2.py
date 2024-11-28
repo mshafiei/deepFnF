@@ -18,8 +18,8 @@ class Net(deepfnf2):
         self.llf_levels=llf_levels
         self.IMSZ = IMSZ
         super().__init__(**kargs)
-        self.llf = lambda input, guide, input_pyramid, guide_pyramid, alpha_h, alpha_i: gllf(input, guide, input_pyramid, guide_pyramid, self.llf_levels, self.llf_levels, alpha_h, alpha_i, IMSZ=self.IMSZ, beta=self.llf_beta, sigma=1)
-        # self.llf = lambda input, guide, alpha_h, alpha_i: gllf_diffable(input, guide, self.llf_levels, self.llf_levels, alpha_h, alpha_i, IMSZ=self.IMSZ, beta=self.llf_beta, sigma=1)
+        # self.llf = lambda input, guide, input_pyramid, guide_pyramid, alpha_h, alpha_i: gllf(input, guide, input_pyramid, guide_pyramid, self.llf_levels, self.llf_levels, alpha_h, alpha_i, IMSZ=self.IMSZ, beta=self.llf_beta, sigma=1)
+        self.llf = lambda input, guide, alpha_h, alpha_i: gllf_diffable(input, guide, self.llf_levels, self.llf_levels, alpha_h, alpha_i, IMSZ=self.IMSZ, beta=self.llf_beta, sigma=1)
         
     def predict_coeff(self, inp):
         '''Predict per-pixel coefficient vector given the input'''
@@ -56,17 +56,18 @@ class Net(deepfnf2):
         filtered_images = filtered_images + smoothed_images
         filtered_ambient = filtered_images[...,:3]
         filtered_flash = filtered_images[...,3:]
-        return self.llf(filtered_ambient, filtered_flash, filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i), filtered_ambient, filtered_flash
-        # return self.llf(filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i)
+        # return self.llf(filtered_ambient, filtered_flash, filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i), filtered_ambient, filtered_flash
+        return self.llf(filtered_ambient, filtered_flash, self.llf_alpha_h, self.llf_alpha_i)
 
     @tf.function
     def forward(self, inputs):
         outputs = edict()
-        denoised_flash, filtered_ambient, filtered_flash = self.filter_flash_ambient(inputs.net_ft_input)
+        # filtered_ambient, filtered_flash
+        denoised_flash = self.filter_flash_ambient(inputs.net_ft_input)
         
         outputs.output = denoised_flash
         outputs.alpha_map_i = self.llf_alpha_i
         outputs.alpha_map_h = self.llf_alpha_h
-        outputs.llf_input = filtered_ambient
-        outputs.llf_guide = filtered_flash
+        outputs.llf_input = outputs.output
+        outputs.llf_guide = outputs.output
         return outputs
