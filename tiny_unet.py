@@ -4,10 +4,10 @@ import numpy as np
 import tensorflow as tf
 
 import utils.tf_utils as tfu
-
+from easydict import EasyDict as edict
 
 class Net:
-    def __init__(self, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, unet_output_size=3, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
         self.weights = {}
         self.activations = OrderedDict()
         self.num_basis = num_basis
@@ -15,6 +15,8 @@ class Net:
         self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
+        self.output_dim_size = unet_output_size
+        assert unet_output_size <= 8
 
     def conv(
             self, name, inp, outch, ksz=3,
@@ -136,6 +138,27 @@ class Net:
         out = self.conv(pfx + 'bottleneck_2', out, self.channel_count(1024),
                         activation_name=pfx + 'bottleneck')
         return out, [d1, d2, d3, d4, d5]
+    
+    def encode_scalar(self, out, pfx=''):
+        out = self.conv(pfx + 'inp', out, self.channel_count(64))
+
+        out, _ = self.down_block(out, self.channel_count(64  ), pfx + 'down1')
+        out, _ = self.down_block(out, self.channel_count(128 ), pfx + 'down2')
+        out, _ = self.down_block(out, self.channel_count(256 ), pfx + 'down3')
+        out, _ = self.down_block(out, self.channel_count(512 ), pfx + 'down4')
+        out, _ = self.down_block(out, self.channel_count(1024), pfx + 'down5')
+        out, _ = self.down_block(out, self.channel_count(1024), pfx + 'down5')
+        out, _ = self.down_block(out, self.channel_count(512), pfx + 'down5')
+        out, _ = self.down_block(out, self.channel_count(256), pfx + 'down5')
+        out = self.conv(pfx + 'bottleneck_1', out, self.channel_count(128))
+        out = self.conv(pfx + 'bottleneck_2', out, self.channel_count(64))
+        out = self.conv(pfx + 'bottleneck_3', out, self.channel_count(32))
+        out = self.conv(pfx + 'bottleneck_4', out, self.channel_count(16))
+        out = self.conv(pfx + 'bottleneck_5', out, self.channel_count(8))
+        out = self.conv(pfx + 'bottleneck_6', out, self.channel_count(4))
+        out = self.conv(pfx + 'bottleneck_7', out, self.channel_count(2), activation_name=pfx + 'bottleneck')
+
+        return out
 
     def decode(self, out, skips, pfx=''):
         d1, d2, d3, d4, d5 = skips
@@ -145,74 +168,15 @@ class Net:
         out = self.up_block(out, self.channel_count(64 ), d2, pfx + 'up4')
         out = self.up_block(out, self.channel_count(64 ), d1, pfx + 'up5')
 
-        out = self.conv(pfx + 'end_1', out, self.channel_count(64))
-        out = self.conv(pfx + 'end_2', out, self.channel_count(64), activation_name=pfx + 'end')
+        out = self.conv(pfx + 'end_1', out, self.channel_count(64), relu=False)
+        out = self.conv(pfx + 'end_2', out, self.channel_count(32), relu=False)
+        out = self.conv(pfx + 'end_3', out, self.channel_count(16), relu=False)
+        out = self.conv(pfx + 'end_4', out, self.channel_count(8), relu=False)
+        out = self.conv(pfx + 'end_5', out, self.channel_count(self.output_dim_size), relu=False, activation_name=pfx + 'end')
 
         return out
 
-    def create_basis(self):
-        '''Predict image-specific basis'''
-        assert self.ksz == 15
-        bottleneck = self.activations['bottleneck']
-        out = tf.reduce_mean(bottleneck, axis=[1, 2], keepdims=True)  # 1x1
-        out = self.kernel_up_block(
-            out, self.channel_count(512,), self.activations['skip_down5'], 'k_up1')  # 2x2
-        out = self.kernel_up_block(
-            out, self.channel_count(256,), self.activations['skip_down4'], 'k_up2')  # 4x4
-        out = self.kernel_up_block(
-            out, self.channel_count(256,), self.activations['skip_down3'], 'k_up3')  # 8x8
-        out = self.kernel_up_block(
-            out, self.channel_count(128), self.activations['skip_down2'], 'k_up4')  # 16x16
-        out = self.conv('k_conv', out, self.channel_count(128), ksz=2, stride=1, pad='VALID')
-        out = self.conv('k_output_1', out, self.channel_count(128))
-        out = self.conv('k_output_2', out, 3 * 2 * self.num_basis, relu=False)
-        out = tf.reshape(
-            out, [-1, self.ksz * self.ksz * 3 * 2, self.num_basis])
-        self.basis = tf.transpose(out, [0, 2, 1])
-
-    def predict_coeff(self, inp):
-        '''Predict per-pixel coefficient vector given the input'''
-        self.imsp = tf.shape(inp)
-
-        out, skips = self.encode(inp)
-        out = self.decode(out, skips)
-        out = self.conv('output', out, self.num_basis + 6, relu=False)
-        self.coeffs_pre_soft = out
-        self.coeffs = out[..., :self.num_basis]
-        self.scale = out[..., -6:-3]
-        self.llf_alpha = out[..., -3:]
-        self.activations['output'] = self.coeffs
-
-    def combine(self):
-        '''Combine coeffs and basis to get a per-pixel kernel'''
-        imsp = self.imsp
-        coeffs = tf.reshape(
-            self.coeffs, [-1, imsp[1] * imsp[2], self.num_basis])
-        self.kernels = tf.matmul(
-            coeffs,
-            self.basis
-        )  # (h * w) x (ksz * ksz * 3 * 2)
-        self.kernels = tf.reshape(
-            self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
-        self.activations['decoding'] = self.kernels
-
     def forward(self, inp):
-        self.predict_coeff(inp)
-        self.create_basis()
-        self.combine()
-
-        filtered_ambient = tfu.apply_filtering(
-            inp[:, :, :, :3], self.kernels[..., 0])
-
-        # "Bilinearly upsample kernels + filtering"
-        # is equivalent to
-        # "filter the image with a bilinear kernel + dilated filter the image
-        # with the original kernel".
-        # This will save more memory.
-        smoothed_ambient = tfu.bilinear_filter(inp[:, :, :, :3], ksz=7)
-        smoothed_ambient = tfu.apply_dilated_filtering(
-            smoothed_ambient, self.kernels[..., 1], dilation=4)
-        filtered_ambient = filtered_ambient + smoothed_ambient
-        denoised = filtered_ambient * self.scale
-
-        return denoised
+        out, skips = self.encode(inp.net_ft_input)
+        out = self.decode(out, skips)
+        return edict(output=out)

@@ -12,7 +12,7 @@ import timeit
 import tensorflow.experimental.numpy as tnp
 import tqdm
 import os
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 logr = viz.logger(opts=opts)
 def _downsample(im):
     """Downsample with a 1 3 3 1 filter"""
@@ -157,70 +157,37 @@ def remap(fx, alpha):
     # fx = fx * 256
     return alpha * fx * tf.exp(-fx * fx / 2.0)
 
-def remapping_2d(i, idx_guide, k_i, k_g, n_levels, sigma, beta, alpha_h, alpha_i):
+def remapping_2d(i, g, k_i, k_g, n_levels, sigma, beta, alpha_h, alpha_i):
     level_input = k_i / (n_levels - 1)
     level_guide = k_g / (n_levels - 1)
-    return sigma * level_input + beta * (i - level_input) + remap(idx_guide - level_guide, alpha_h) + remap(i - level_input, alpha_i)
+    return sigma * level_input + beta * (i - level_input) + remap(g - level_guide, alpha_h) + remap(i - level_input, alpha_i)
 
 
 @tf.function
-def gllf_diffable_2d(im_i, im_g, max_levels, max_discrete_levels, alpha_h, alpha_i, beta=1, sigma=1, IMSZ=448):
-    # im_i_pyramid = tf.stop_gradient(im_i_pyramid)
-    # im_g_pyramid = tf.stop_gradient(im_g_pyramid)
+def gllf_diffable_2d(im_i, im_g, max_levels, max_discrete_levels, alpha_i, alpha_h, beta=1, sigma=1, IMSZ=448):
+    lpyramid = images_to_lookup_2d(im_i, im_g, max_levels, max_discrete_levels, alpha_h, alpha_i, beta=1, sigma=1, IMSZ=448)
+        
     #input and guide pyramids
     G_i = GaussianPyramid(im_i, max_levels)
     G_g = GaussianPyramid(im_g, max_levels)
-    
-    idx_guide = im_g #* (max_discrete_levels - 1) #* 256.0
-    # idx_guide = tfp.math.clip_by_value_preserve_gradient(idx_guide, 0, (max_discrete_levels - 1) * 256)
-    # idx_guide = tf.cast(idx_guide, dtype=tf.float32)
-    # compute remapped images and its pyramids
-    lpyramid = []
-    for k_i in range(max_discrete_levels):
-        l_i = []
-        for k_g in range(max_discrete_levels):
-            r_i_j = remapping_2d(im_i, im_g, k_i, k_g, max_discrete_levels, sigma, beta, alpha_h, alpha_i)
-            #compute gaussian and laplacian of remapped images
-            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
-            
-            f_i_j_l = LaplacianPyramid(f_i_j_g)
-
-            for i in range(len(f_i_j_l)):
-                f_i_j_l[i] = _resize(f_i_j_l[i], im_i.shape[1:3])
-            
-            l_g_images = tf.stack(f_i_j_l, axis=0)
-            l_i.append(l_g_images) #l x 1 x h x w x 3
-        
-        lpyramid.append(tf.stack(l_i,axis=1))#l x k_g x 1 x h x w x 3
-    lpyramid = tf.stack(lpyramid,axis=1) #l x k_i x k_g x 1 x h x w x 3
-    
     outLPyramid = []
-    G_i_resized = [_resize(i,(IMSZ, IMSZ)) for i in G_i]
-    G_g_resized = [_resize(i,(IMSZ, IMSZ)) for i in G_g]
     for i in range(max_levels):
-        outLPyramid_i = diffable_slice_2d(G_i_resized[i], G_g_resized[i], lpyramid[i], max_discrete_levels,IMSZ)
-        # outLPyramid_i *= i == 3
-        outLPyramid.append(tf.squeeze(outLPyramid_i))
+        outLPyramid_i = diffable_slice_2d(G_i[i], G_g[i], lpyramid[i], max_discrete_levels,IMSZ)
+        outLPyramid.append(outLPyramid_i)
     
-    # return outLPyramid
     #collapse pyramid
     g = [0] * max_levels
     g[max_levels - 1] = outLPyramid[max_levels - 1]
     for j in range(max_levels - 2, -1, -1):
-        g[j] = g[j + 1] + outLPyramid[j]
-        # g[j] = outLPyramid[3]
-    # g[0] = outLPyramid[0]
-    #clip for visualization
-    # for j in range(max_levels):
-    #     g[j] = tf.abs(tfp.clip_by_value(g[j] * 1,0,1))
+        g[j] = _upsample(g[j + 1]) + outLPyramid[j]
     
-    return g[0][None,...]
+    return g[0]
 
 def resize_pyramid(im_i_pyramids, max_levels, max_discrete_levels, IMSZ):
     G_is = []
     for im_i_pyramid in im_i_pyramids:
         G_i = GaussianPyramid(im_i_pyramid, max_levels)
-        G_is.append(tf.stack([_resize(i * (max_discrete_levels - 1),(IMSZ, IMSZ)) for i in G_i]))
+        G_is.append(tf.stack([_resize(i,(IMSZ, IMSZ)) for i in G_i]))
     return tf.stack(G_is,axis=0) #n, L, 1, h, w, c
 
 def reconstruct_Laplacian(outLPyramid, max_levels):
@@ -228,22 +195,148 @@ def reconstruct_Laplacian(outLPyramid, max_levels):
     g = [0] * max_levels
     g[max_levels - 1] = outLPyramid[max_levels - 1]
     for j in range(max_levels - 2, -1, -1):
-        g[j] = g[j + 1] + outLPyramid[j]
+        g[j] = _upsample(g[j + 1]) + outLPyramid[j]
     return g[0]
+
+
+def remapping_1d(i, k, sigma, beta, alpha, n_levels):
+    level = k / (n_levels - 1)
+    return sigma * level + beta * (i - level) + remap(i - level, alpha)
+
+def images_to_lookup_1d(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, IMSZ=448):
+    # compute remapped images and its pyramids
+    lpyramid = []
+    for im_i, alpha, beta, sigma in zip(im_is, alphas, betas, sigmas):
+        l_i = []
+        for k_i in range(max_discrete_levels):
+            r_i_j = remapping_1d(im_i, k_i, sigma, beta, alpha, max_discrete_levels)
+            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
+            f_i_j_l = LaplacianPyramid(f_i_j_g)
+            for i in range(len(f_i_j_l)):
+                f_i_j_l[i] = _resize(f_i_j_l[i], im_i.shape[1:3])
+            l_g_images = tf.stack(f_i_j_l, axis=0)
+            l_i.append(l_g_images) #l x 1 x h x w x 3
+        lpyramid.append(tf.stack(l_i,axis=1))#l x L x 1 x h x w x 3
+    lpyramid = tf.stack(lpyramid,axis=0) #k_i, L x L x 1 x h x w x 3
+
+    return lpyramid
+
+def images_to_lookup_1d_noresize(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, IMSZ=448):
+    #in this function
+    #K is intensity sample count max_discrete_levels
+    #L is level count max_levels
+    # compute remapped images and its pyramids
+    lpyramid = [[[] for _ in range(len(im_is))] for _ in range(max_levels)]
+    for k_i in range(max_discrete_levels):
+        for im_idx, (im_i, alpha, beta, sigma) in enumerate(zip(im_is, alphas, betas, sigmas)):
+            r_i_j = remapping_1d(im_i, k_i, sigma, beta, alpha, max_discrete_levels)
+            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
+            f_i_j_l = LaplacianPyramid(f_i_j_g)# K, 1, h, w, c
+            for f_i_j_l_i, f_i_j_l_v in enumerate(f_i_j_l):
+                lpyramid[f_i_j_l_i][im_idx].append(f_i_j_l_v) #{L}, I, K, 1, h, w, c
+    
+    lpyramid = [tf.stack(lpyramid[i],axis=0) for i in range(max_levels)]#{L}, I, K, 1, h, w, c
+    lpyramid = [tf.transpose(i,(2,0,1,3,4,5)) for i in lpyramid]#{L}, 1, I, K, h, w, c
+    return lpyramid
+
+def remapping_1d_threshold_source(i, k, sigma, beta, alpha, n_levels, threshold):
+    level = k / (n_levels - 1)
+    diff = i - level
+    result = tf.zeros_like(i)
+    compress = sigma * level + tf.sign(diff) * (beta * (tf.abs(diff)-threshold)+threshold)
+    details = sigma * level + tf.sign(diff) * threshold * tf.pow(tf.abs(diff)/threshold, alpha)
+    result = tf.where(diff < threshold, details, compress)
+    return result
+
+def remapping_1d_threshold_guide(i, k, sigma, beta, alpha, n_levels, threshold):
+    level = k / (n_levels - 1)
+    diff = i - level
+    result = tf.zeros_like(i)
+    compress = sigma * level + tf.sign(diff) * (beta * (tf.abs(diff)-threshold)+threshold)
+    details = sigma * level + tf.sign(diff) * threshold * tf.pow(tf.abs(diff)/threshold, alpha)
+    result = tf.where(diff < threshold, details, compress*0)
+    return result
+
+
+
+def images_to_lookup_1d_noresize_threshold(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, threshold, remappings_1d, IMSZ=448):
+    #in this function
+    #K is intensity sample count max_discrete_levels
+    #L is level count max_levels
+    # compute remapped images and its pyramids
+    lpyramid = [[[] for _ in range(len(im_is))] for _ in range(max_levels)]
+    for k_i in range(max_discrete_levels):
+        for im_idx, (im_i, alpha, beta, sigma, remapping_1d) in enumerate(zip(im_is, alphas, betas, sigmas, remappings_1d)):
+            r_i_j = remapping_1d(im_i, k_i, sigma, beta, alpha, max_discrete_levels, threshold)
+            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
+            f_i_j_l = LaplacianPyramid(f_i_j_g)# K, 1, h, w, c
+            for f_i_j_l_i, f_i_j_l_v in enumerate(f_i_j_l):
+                lpyramid[f_i_j_l_i][im_idx].append(f_i_j_l_v) #{L}, I, K, 1, h, w, c
+    
+    lpyramid = [tf.stack(lpyramid[i],axis=0) for i in range(max_levels)]#{L}, I, K, 1, h, w, c
+    lpyramid = [tf.transpose(i,(2,0,1,3,4,5)) for i in lpyramid]#{L}, 1, I, K, h, w, c
+    return lpyramid
+
+# @tf.function
+def images_to_lookup_2d(im_i, im_g, max_levels, max_discrete_levels, alpha_h, alpha_i, beta=1, sigma=1, IMSZ=448):    
+    # compute remapped images and its pyramids
+    lpyramid = [[[[] for _ in range(max_levels)] for _ in range(max_discrete_levels)] for _ in range(max_discrete_levels)]
+    for k_i in range(max_discrete_levels):
+        for k_g in range(max_discrete_levels):
+            r_i_j = remapping_2d(im_i, im_g, k_i, k_g, max_discrete_levels, sigma, beta, alpha_h, alpha_i)
+            #compute gaussian and laplacian of remapped images
+            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
+            f_i_j_l = LaplacianPyramid(f_i_j_g)# K, 1, h, w, c
+            for i, l in enumerate(f_i_j_l):
+                lpyramid[i][k_i][k_g] = l
+    #lpyramid shape is {L}, K, K, 1, h, w, c
+    lpyramid = [[tf.stack(lpyramid[i][j],axis=0) for j in range(max_discrete_levels)] for i in range(max_levels)]
+    lpyramid = [tf.stack(lpyramid[i],axis=0) for i in range(max_levels)]
+    #{L}, K, K, 1, h, w, c -> {L}, 1, K, K, h, w, c
+    lpyramid = [tf.transpose(lpyramid[i],(2,0,1,3,4,5)) for i in range(max_levels)]
+    return lpyramid
+
 
 @tf.function
 def gllf_diffable_1d(im_is, alphas, max_levels, max_discrete_levels, betas, sigmas, IMSZ=448):
-    outLPyramids = images_to_lookup_1d(im_is, max_levels, max_discrete_levels, alphas, IMSZ=IMSZ, betas=betas, sigmas=sigmas)
-    G_is = resize_pyramid(im_is, max_levels, max_discrete_levels, IMSZ)
-
+    outLPyramids = images_to_lookup_1d_noresize(im_is, max_levels, max_discrete_levels, alphas, IMSZ=IMSZ, betas=betas, sigmas=sigmas)
+    G_is = [[[] for _ in range(len(im_is))] for _ in range(max_levels)]
+    for im_idx, im_i_pyramid in enumerate(im_is):
+        G_i = GaussianPyramid(im_i_pyramid, max_levels)
+        for i, g in enumerate(G_i):
+            G_is[i][im_idx] = g
+    G_is = [tf.stack(i,axis=0) for i in G_is] # {L}, I, 1, h, w, c
+    G_is = [tf.transpose(i,(1,0,2,3,4)) for i in G_is] # {L}, 1, I, h, w, c
+    
     outLPyramid = []
     for i in range(max_levels):
         #outLPyramids n, L, L, 1, h, w, c
         #G_is         n, L, 1, h, w, c
-        outLPyramid_slice = diffable_slice_separable(G_is[:,i,...], outLPyramids[:,i,...], max_discrete_levels,IMSZ)
+        outLPyramid_slice = diffable_slice_separable(G_is[i], outLPyramids[i], max_discrete_levels,IMSZ)
         outLPyramid.append(outLPyramid_slice)
-    
     return reconstruct_Laplacian(outLPyramid, max_levels)
+
+@tf.function
+def gllf_diffable_1d_threshold(im_is, alphas, max_levels, max_discrete_levels, betas, sigmas, threshold, remappings_1d, IMSZ=448):
+    # outLPyramids = images_to_lookup_1d(im_is, max_levels, max_discrete_levels, alphas, IMSZ=IMSZ, betas=betas, sigmas=sigmas)
+    outLPyramids = images_to_lookup_1d_noresize_threshold(im_is, max_levels, max_discrete_levels, alphas, IMSZ=IMSZ, betas=betas, sigmas=sigmas, threshold=threshold, remappings_1d=remappings_1d)
+    # G_is = resize_pyramid(im_is, max_levels, max_discrete_levels, IMSZ)
+    G_is = [[[] for _ in range(len(im_is))] for _ in range(max_levels)]
+    for im_idx, im_i_pyramid in enumerate(im_is):
+        G_i = GaussianPyramid(im_i_pyramid, max_levels)
+        for i, g in enumerate(G_i):
+            G_is[i][im_idx] = g
+    G_is = [tf.stack(i,axis=0) for i in G_is] # {L}, I, 1, h, w, c
+    G_is = [tf.transpose(i,(1,0,2,3,4)) for i in G_is] # {L}, 1, I, h, w, c
+    
+    outLPyramid = []
+    for i in range(max_levels):
+        #outLPyramids n, L, L, 1, h, w, c
+        #G_is         n, L, 1, h, w, c
+        outLPyramid_slice = diffable_slice_separable(G_is[i], outLPyramids[i], max_discrete_levels,IMSZ)
+        outLPyramid.append(outLPyramid_slice)
+    return reconstruct_Laplacian(outLPyramid, max_levels)
+
 
 def smooth_strict_clip(x, clip_min, clip_max, smoothing=1.0):
     """
@@ -269,201 +362,171 @@ def smooth_strict_clip(x, clip_min, clip_max, smoothing=1.0):
     output = (clipped / scale) + offset
     
     return output
+
 # @tf.function
-def images_to_lookup_2d(im_i, im_g, im_i_pyramid, im_g_pyramid, max_levels, max_discrete_levels, alpha_h, alpha_i, beta=1, sigma=1, IMSZ=448):
-    # im_i_pyramid = tf.stop_gradient(im_i_pyramid)
-    # im_g_pyramid = tf.stop_gradient(im_g_pyramid)
-    #input and guide pyramids
-    G_i = GaussianPyramid(im_i_pyramid, max_levels)
-    G_g = GaussianPyramid(im_g_pyramid, max_levels)
+# def set_inner_slice_1d(l_i_i, l, IMSZ=448, ones=False):
+#     #l shape is b, I, L, h, w, c
+#     #l_i_i shape is b, I, h, w, c
     
-    idx_guide = im_g #* (max_discrete_levels - 1) #* 256.0
-    # idx_guide = tfp.math.clip_by_value_preserve_gradient(idx_guide, 0, (max_discrete_levels - 1) * 256)
-    # idx_guide = tf.cast(idx_guide, dtype=tf.float32)
-    # compute remapped images and its pyramids
-    lpyramid = []
-    for k_i in range(max_discrete_levels):
-        l_i = []
-        for k_g in range(max_discrete_levels):
-            r_i_j = remapping_2d(im_i, idx_guide, k_i, k_g, max_discrete_levels, sigma, beta, alpha_h, alpha_i)
-            #compute gaussian and laplacian of remapped images
-            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
-            
-            f_i_j_l = LaplacianPyramid(f_i_j_g)
+#     b, img_ct, h, w, c_ct = l_i_i.shape
+#     l_i_i_shape = l_i_i.shape
+#     l_shape = l.shape
+#     x = tf.convert_to_tensor(np.arange(w,dtype=np.int32))
+#     y = tf.convert_to_tensor(np.arange(h,dtype=np.int32))
+#     c = tf.convert_to_tensor(np.arange(c_ct,dtype=np.int32))
+#     x, y, c = tnp.meshgrid(x, y, c)
+#     x = tf.repeat(x[None],axis=0,repeats=img_ct*b)
+#     y = tf.repeat(y[None],axis=0,repeats=img_ct*b)
+#     c = tf.repeat(c[None],axis=0,repeats=img_ct*b)
+#     l_i_i = tf.reshape(l_i_i,[b*img_ct]+l_i_i_shape[2:])
+#     idx = tf.stack((l_i_i,y,x,c),axis=-1)
+#     l = tf.reshape(l, [b * img_ct] + l_shape[2:])
+#     # gathered = tf.gather_nd(l, idx,batch_dims=1)
+#     # gathered_reshape = tf.reshape(gathered,(b,img_ct)+gathered.shape[1:])
 
-            for i in range(len(f_i_j_l)):
-                # f_i_j_l[i] = _resize(f_i_j_l[i], im_i.shape[1:3])
-                f_i_j_l[i] = _resize(f_i_j_g[i], im_i.shape[1:3])
-                
-            
-            l_g_images = tf.stack(f_i_j_l, axis=0)
-            l_i.append(l_g_images) #l x 1 x h x w x 3
-        
-        lpyramid.append(tf.stack(l_i,axis=1))#l x k_g x 1 x h x w x 3
-    lpyramid = tf.stack(lpyramid,axis=1) #l x k_i x k_g x 1 x h x w x 3
+#     zero_l = tf.zeros(l.shape)
+#     gathered_values = tf.gather_nd(zero_l, idx, batch_dims=1)
+#     update = tf.ones_like(gathered_values)
+#     zero_l_update = []
+#     for i in range(img_ct):
+#         zero_l_update.append(tf.scatter_nd(idx[i], update[i], zero_l[i].shape))
+#     zero_l_update = tf.stack(zero_l_update,axis=0)
+#     zero_l_update = tf.reshape(zero_l_update, l_shape)
+#     return zero_l_update
     
-    G_i_resized = [_resize(i * (max_discrete_levels - 1),(IMSZ, IMSZ)) for i in G_i]
-    G_g_resized = [_resize(i * (max_discrete_levels - 1),(IMSZ, IMSZ)) for i in G_g]
-    slice_inp_i = []
-    slice_inp_g = []
-    slice_inp_l = []
-    for i in range(max_levels):
-        slice_inp_i.append(G_i_resized[i])
-        slice_inp_g.append(G_g_resized[i])
-        slice_inp_l.append(lpyramid[i])
+# @tf.function
+# def inner_slice_1d(l_i_i, l, IMSZ=448):
+#     #l shape is b, I, L, h, w, c
+#     #l_i_i shape is b, I, h, w, c
     
-    return slice_inp_i, slice_inp_g, slice_inp_l
-
-# def remapping_2d(i, idx_guide, k_i, k_g, n_levels, sigma, beta, alpha_h, alpha_i):
-#     level_input = k_i / (n_levels - 1)
-#     level_guide = k_g / (n_levels - 1)
-#     return sigma * level_input + beta * (i - level_input) + remap(idx_guide - level_guide, alpha_h) + remap(idx_guide - level_guide, alpha_i)
-
-
-def remapping_1d(i, idx, k, sigma, beta, alpha, n_levels):
-    level = k / (n_levels - 1)
-    return sigma * level + beta * (i - level) + remap(idx - level, alpha)
-
-def images_to_lookup_1d(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, IMSZ=448):
-    # compute remapped images and its pyramids
-    lpyramid = []
-    for im_i, alpha, beta, sigma in zip(im_is, alphas, betas, sigmas):
-        l_i = []
-        for k_i in range(max_discrete_levels):
-            r_i_j = remapping_1d(im_i, im_i, k_i, sigma, beta, alpha, max_discrete_levels)
-            f_i_j_g = GaussianPyramid(r_i_j, max_levels)
-            f_i_j_l = LaplacianPyramid(f_i_j_g)
-            for i in range(len(f_i_j_l)):
-                f_i_j_l[i] = _resize(f_i_j_l[i], im_i.shape[1:3])
-            l_g_images = tf.stack(f_i_j_l, axis=0)
-            l_i.append(l_g_images) #l x 1 x h x w x 3
-        lpyramid.append(tf.stack(l_i,axis=1))#l x L x 1 x h x w x 3
-    lpyramid = tf.stack(lpyramid,axis=0) #k_i, L x L x 1 x h x w x 3
-
-    return lpyramid
-
-    # for k_i in range(max_discrete_levels):
-    #     r_i_j = remapping_1d(im_i, idx_guide, k_i, k_g, max_discrete_levels, sigma, beta, alpha_h, alpha_i)
-    # for k_i in range(max_discrete_levels):
-    #     l_i = []
-    #     for k_g in range(max_discrete_levels):
-    #         r_i_j = remapping_2d(im_i, idx_guide, k_i, k_g, max_discrete_levels, sigma, beta, alpha_h, alpha_i)
-    #         #compute gaussian and laplacian of remapped images
-    #         f_i_j_g = GaussianPyramid(r_i_j, max_levels)
-            
-    #         f_i_j_l = LaplacianPyramid(f_i_j_g)
-
-    #         for i in range(len(f_i_j_l)):
-    #             # f_i_j_l[i] = _resize(f_i_j_l[i], im_i.shape[1:3])
-    #             f_i_j_l[i] = _resize(f_i_j_g[i], im_i.shape[1:3])
-                
-            
-    #         l_g_images = tf.stack(f_i_j_l, axis=0)
-    #         l_i.append(l_g_images) #l x 1 x h x w x 3
-        
-    #     lpyramid.append(tf.stack(l_i,axis=1))#l x k_g x 1 x h x w x 3
-    # lpyramid = tf.stack(lpyramid,axis=1) #l x k_i x k_g x 1 x h x w x 3
-    
-    # G_i_resized = [_resize(i * (max_discrete_levels - 1),(IMSZ, IMSZ)) for i in G_i]
-    # G_g_resized = [_resize(i * (max_discrete_levels - 1),(IMSZ, IMSZ)) for i in G_g]
-    # slice_inp_i = []
-    # slice_inp_g = []
-    # slice_inp_l = []
-    # for i in range(max_levels):
-    #     slice_inp_i.append(G_i_resized[i])
-    #     slice_inp_g.append(G_g_resized[i])
-    #     slice_inp_l.append(lpyramid[i])
-    
-    # return slice_inp_i, slice_inp_g, slice_inp_l
+#     b, img_ct, h, w, c_ct = l_i_i.shape
+#     l_i_i_shape = l_i_i.shape
+#     l_shape = l.shape
+#     x = tf.convert_to_tensor(np.arange(w,dtype=np.int32))
+#     y = tf.convert_to_tensor(np.arange(h,dtype=np.int32))
+#     c = tf.convert_to_tensor(np.arange(c_ct,dtype=np.int32))
+#     x, y, c = tnp.meshgrid(x, y, c)
+#     x = tf.repeat(x[None],axis=0,repeats=img_ct*b)
+#     y = tf.repeat(y[None],axis=0,repeats=img_ct*b)
+#     c = tf.repeat(c[None],axis=0,repeats=img_ct*b)
+#     l_i_i = tf.reshape(l_i_i,[b*img_ct]+l_i_i_shape[2:])
+#     idx = tf.stack((l_i_i,y,x,c),axis=-1)
+#     l = tf.reshape(l, [b * img_ct] + l_shape[2:])
+#     gathered = tf.gather_nd(l, idx,batch_dims=1)
+#     gathered_reshape = tf.reshape(gathered,(b,img_ct)+gathered.shape[1:])
+#     return gathered_reshape
 
 @tf.function
-def inner_slice(l_i_i, l_g_i, l, IMSZ=448):
-    x = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    y = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    c = tf.convert_to_tensor(np.arange(3,dtype=np.int32))
+def inner_slice(l_i_i, l_g_i, l):
+    #l shape is b, I, L, h, w, c
+    #l_i_i shape is b, I, h, w, c
+    b, h, w, c_ct = l_i_i.shape
+    x = tf.convert_to_tensor(np.arange(w,dtype=np.int32))
+    y = tf.convert_to_tensor(np.arange(h,dtype=np.int32))
+    c = tf.convert_to_tensor(np.arange(c_ct,dtype=np.int32))
     x, y, c = tnp.meshgrid(x, y, c)
-    l_i_i = tf.squeeze(l_i_i)
-    l_g_i = tf.squeeze(l_g_i)
-    idx = tf.stack((l_i_i,l_g_i,y,x,c),axis=-1)[None, None]
-    l = tf.squeeze(l)
-    return tf.gather_nd(l, idx)
+    x = tf.repeat(x[None],axis=0,repeats=b)
+    y = tf.repeat(y[None],axis=0,repeats=b)
+    c = tf.repeat(c[None],axis=0,repeats=b)
+    idx = tf.stack((l_i_i,l_g_i,y,x,c),axis=-1)
+    gathered = tf.gather_nd(l, idx,batch_dims=1)
+    return  gathered
 
 @tf.function
-def inner_slice_1d(l_i_i, l, IMSZ=448):
-    x = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    y = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    c = tf.convert_to_tensor(np.arange(3,dtype=np.int32))
+def set_inner_slice(l_i_i, l_g_i, l):
+    #l shape is b, I, L, h, w, c
+    #l_i_i shape is b, I, h, w, c
+    b, h, w, c_ct = l_i_i.shape
+    x = tf.convert_to_tensor(np.arange(w,dtype=np.int32))
+    y = tf.convert_to_tensor(np.arange(h,dtype=np.int32))
+    c = tf.convert_to_tensor(np.arange(c_ct,dtype=np.int32))
     x, y, c = tnp.meshgrid(x, y, c)
-    l_i_i = tf.squeeze(l_i_i)
-    idx = tf.stack((l_i_i,y,x,c),axis=-1)[None, None]
-    l = tf.squeeze(l)
-    return tf.gather_nd(l, idx)
-
-@tf.function
-def set_inner_slice(l_i_i, l_g_i, l, IMSZ=448, ones=False):
-    x = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    y = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    c = tf.convert_to_tensor(np.arange(3,dtype=np.int32))
-    x, y, c = tnp.meshgrid(x, y, c)
-    l_i_i = tf.squeeze(l_i_i)
-    l_g_i = tf.squeeze(l_g_i)
-    idx = tf.stack((l_i_i,l_g_i,y,x,c),axis=-1)[None, None]
-    l = tf.squeeze(l)
+    x = tf.repeat(x[None],axis=0,repeats=b)
+    y = tf.repeat(y[None],axis=0,repeats=b)
+    c = tf.repeat(c[None],axis=0,repeats=b)
+    idx = tf.stack((l_i_i,l_g_i,y,x,c),axis=-1)
     zero_l = tf.zeros(l.shape)
-    gathered_values = tf.gather_nd(zero_l, idx)
-    if(ones):
-        zero_l = tf.zeros(l.shape)
-        gathered_values = tf.gather_nd(zero_l, idx)
-        update = tf.ones_like(gathered_values)
-    else:
-        gathered_values = tf.gather_nd(l, idx)
-        update = gathered_values
-    zero_l_update = tf.scatter_nd(idx, update, zero_l.shape)
+    gathered_values = tf.gather_nd(zero_l, idx, batch_dims=1)
+    update = tf.ones_like(gathered_values)
+    zero_l_update = []
+    for i in range(b):
+        zero_l_update.append(tf.scatter_nd(idx[i], update[i], zero_l[i].shape))
+    zero_l_update = tf.stack(zero_l_update,axis=0)
     return zero_l_update
 
 @tf.function
-def set_inner_slice_1d(l_i_i, l, IMSZ=448, ones=False):
-    x = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    y = tf.convert_to_tensor(np.arange(IMSZ,dtype=np.int32))
-    c = tf.convert_to_tensor(np.arange(3,dtype=np.int32))
+def inner_slice_1d(l_i_i, l, IMSZ=448):
+    #l shape is b, I, L, h, w, c
+    #l_i_i shape is b, I, h, w, c
+    
+    b, img_ct, h, w, c_ct = l_i_i.shape
+    l_i_i_shape = l_i_i.shape
+    l_shape = l.shape
+    x = tf.convert_to_tensor(np.arange(w,dtype=np.int32))
+    y = tf.convert_to_tensor(np.arange(h,dtype=np.int32))
+    c = tf.convert_to_tensor(np.arange(c_ct,dtype=np.int32))
     x, y, c = tnp.meshgrid(x, y, c)
-    l_i_i = tf.squeeze(l_i_i)
-    idx = tf.stack((l_i_i,y,x,c),axis=-1)[None, None]
-    l = tf.squeeze(l)
+    x = tf.repeat(x[None],axis=0,repeats=img_ct*b)
+    y = tf.repeat(y[None],axis=0,repeats=img_ct*b)
+    c = tf.repeat(c[None],axis=0,repeats=img_ct*b)
+    l_i_i = tf.reshape(l_i_i,[b*img_ct]+l_i_i_shape[2:])
+    idx = tf.stack((l_i_i,y,x,c),axis=-1)
+    l = tf.reshape(l, [b * img_ct] + l_shape[2:])
+    gathered = tf.gather_nd(l, idx,batch_dims=1)
+    gathered_reshape = tf.reshape(gathered,(b,img_ct)+gathered.shape[1:])
+    return gathered_reshape
+
+@tf.function
+def set_inner_slice_1d(l_i_i, l, IMSZ=448, ones=False):
+    #l shape is b, I, L, h, w, c
+    #l_i_i shape is b, I, h, w, c
+    
+    b, img_ct, h, w, c_ct = l_i_i.shape
+    l_i_i_shape = l_i_i.shape
+    l_shape = l.shape
+    x = tf.convert_to_tensor(np.arange(w,dtype=np.int32))
+    y = tf.convert_to_tensor(np.arange(h,dtype=np.int32))
+    c = tf.convert_to_tensor(np.arange(c_ct,dtype=np.int32))
+    x, y, c = tnp.meshgrid(x, y, c)
+    x = tf.repeat(x[None],axis=0,repeats=img_ct*b)
+    y = tf.repeat(y[None],axis=0,repeats=img_ct*b)
+    c = tf.repeat(c[None],axis=0,repeats=img_ct*b)
+    l_i_i = tf.reshape(l_i_i,[b*img_ct]+l_i_i_shape[2:])
+    idx = tf.stack((l_i_i,y,x,c),axis=-1)
+    l = tf.reshape(l, [b * img_ct] + l_shape[2:])
+    # gathered = tf.gather_nd(l, idx,batch_dims=1)
+    # gathered_reshape = tf.reshape(gathered,(b,img_ct)+gathered.shape[1:])
+
     zero_l = tf.zeros(l.shape)
-    gathered_values = tf.gather_nd(zero_l, idx)
-    if(ones):
-        zero_l = tf.zeros(l.shape)
-        gathered_values = tf.gather_nd(zero_l, idx)
-        update = tf.ones_like(gathered_values)
-    else:
-        gathered_values = tf.gather_nd(l, idx)
-        update = gathered_values
-    zero_l_update = tf.scatter_nd(idx, update, zero_l.shape)
+    gathered_values = tf.gather_nd(zero_l, idx, batch_dims=1)
+    update = tf.ones_like(gathered_values)
+    zero_l_update = []
+    for i in range(img_ct):
+        zero_l_update.append(tf.scatter_nd(idx[i], update[i], zero_l[i].shape))
+    zero_l_update = tf.stack(zero_l_update,axis=0)
+    zero_l_update = tf.reshape(zero_l_update, l_shape)
     return zero_l_update
     
 @tf.custom_gradient
 def diffable_slice_2d(l_i, l_g, lpyramid, max_discrete_levels,IMSZ):
     l_r,l_c, _, _, _, _ = lpyramid.shape
     #fetch i and g pixels and discretize
-    l_i_i = tf.clip_by_value(tf.cast(l_i * (max_discrete_levels - 1),tf.int32),0, max_discrete_levels-2)
-    l_i_f = l_i * (max_discrete_levels - 1) - tf.cast(l_i_i,dtype=tf.float32)
-    l_g_i = tf.clip_by_value(tf.cast(l_g * (max_discrete_levels - 1),tf.int32),0, max_discrete_levels-2)
-    l_g_f = l_g * (max_discrete_levels - 1) - tf.cast(l_g_i,dtype=tf.float32)
+    max_discrete_levels_ft = tf.cast(max_discrete_levels,tf.float32)
+    l_i_i = tf.clip_by_value(tf.cast(l_i * (max_discrete_levels_ft - 1),tf.int32),0, max_discrete_levels-2)
+    l_i_f = l_i * (max_discrete_levels_ft - 1) - tf.cast(l_i_i,dtype=tf.float32)
+    l_g_i = tf.clip_by_value(tf.cast(l_g * (max_discrete_levels_ft - 1),tf.int32),0, max_discrete_levels-2)
+    l_g_f = l_g * (max_discrete_levels_ft - 1) - tf.cast(l_g_i,dtype=tf.float32)
 
-    l_i_i_0_l_g_i_0 = tf.squeeze(inner_slice(l_i_i,     l_g_i,     lpyramid,IMSZ=IMSZ))
-    l_i_i_1_l_g_i_0 = tf.squeeze(inner_slice(l_i_i + 1, l_g_i,     lpyramid,IMSZ=IMSZ))
-    l_i_i_0_l_g_i_1 = tf.squeeze(inner_slice(l_i_i,     l_g_i + 1, lpyramid,IMSZ=IMSZ))
-    l_i_i_1_l_g_i_1 = tf.squeeze(inner_slice(l_i_i + 1, l_g_i + 1, lpyramid,IMSZ=IMSZ))
+    l_i_i_0_l_g_i_0 = inner_slice(l_i_i,     l_g_i,     lpyramid)
+    l_i_i_1_l_g_i_0 = inner_slice(l_i_i + 1, l_g_i,     lpyramid)
+    l_i_i_0_l_g_i_1 = inner_slice(l_i_i,     l_g_i + 1, lpyramid)
+    l_i_i_1_l_g_i_1 = inner_slice(l_i_i + 1, l_g_i + 1, lpyramid)
 
     # make laplacian pyramid by interpolation
     outLPyramid_i = (1 - l_i_f) * (1 - l_g_f) * l_i_i_0_l_g_i_0        + \
                     (    l_i_f) * (1 - l_g_f) * l_i_i_1_l_g_i_0        + \
                     (1 - l_i_f) * (    l_g_f) * l_i_i_0_l_g_i_1        + \
                     (    l_i_f) * (    l_g_f) * l_i_i_1_l_g_i_1
-        # make laplacian pyramid by interpolation
-    # outLPyramid_i = l_i_i_0_l_g_i_0
-    # outLPyramid_i = lpyramid[0,0,0]
     # Define the custom gradient
     def grad_fn(dy):
 
@@ -478,14 +541,14 @@ def diffable_slice_2d(l_i, l_g, lpyramid, max_discrete_levels,IMSZ):
                 (1  - l_i_f) * (   1) * l_i_i_0_l_g_i_1        + \
                 (     l_i_f) * (   1) * l_i_i_1_l_g_i_1
         
-        l_i_i_0_l_g_i_0_ones = (1  - l_i_f) * (1 - l_g_f) * tf.squeeze(set_inner_slice(l_i_i,     l_g_i,     lpyramid, IMSZ=IMSZ, ones=True))
-        l_i_i_1_l_g_i_0_ones = (     l_i_f) * (1 - l_g_f) * tf.squeeze(set_inner_slice(l_i_i + 1, l_g_i,     lpyramid, IMSZ=IMSZ, ones=True))
-        l_i_i_0_l_g_i_1_ones = (1  - l_i_f) * (    l_g_f) * tf.squeeze(set_inner_slice(l_i_i,     l_g_i + 1, lpyramid, IMSZ=IMSZ, ones=True))
-        l_i_i_1_l_g_i_1_ones = (     l_i_f) * (    l_g_f) * tf.squeeze(set_inner_slice(l_i_i + 1, l_g_i + 1, lpyramid, IMSZ=IMSZ, ones=True))
-        dy_l_l = dy[None,None,...]
+        l_i_i_0_l_g_i_0_ones = (1  - l_i_f) * (1 - l_g_f) * set_inner_slice(l_i_i,     l_g_i,     lpyramid)
+        l_i_i_1_l_g_i_0_ones = (     l_i_f) * (1 - l_g_f) * set_inner_slice(l_i_i + 1, l_g_i,     lpyramid)
+        l_i_i_0_l_g_i_1_ones = (1  - l_i_f) * (    l_g_f) * set_inner_slice(l_i_i,     l_g_i + 1, lpyramid)
+        l_i_i_1_l_g_i_1_ones = (     l_i_f) * (    l_g_f) * set_inner_slice(l_i_i + 1, l_g_i + 1, lpyramid)
         dy_d_l = l_i_i_0_l_g_i_0_ones + l_i_i_1_l_g_i_0_ones + l_i_i_0_l_g_i_1_ones + l_i_i_1_l_g_i_1_ones
+        
 
-        return dy * d_i, dy * d_g, dy_l_l * dy_d_l[:,:,None,...], None, None
+        return dy * d_i, dy * d_g, dy[None,None,...] * dy_d_l, None, None
 
 
     return outLPyramid_i, grad_fn
@@ -493,43 +556,27 @@ def diffable_slice_2d(l_i, l_g, lpyramid, max_discrete_levels,IMSZ):
 @tf.custom_gradient
 def diffable_slice_separable(l_i, lpyramids, max_discrete_levels,IMSZ):
     #fetch i and g pixels and discretize
-    l_i_is = tf.clip_by_value(tf.cast(l_i * (max_discrete_levels - 1), tf.int32), 0, max_discrete_levels-2)
-    l_i_fs = l_i - tf.cast(l_i_is, dtype=tf.float32)
+    max_discrete_levels_ft = tf.cast(max_discrete_levels,tf.float32)
+    l_i_is = tf.clip_by_value(tf.cast(l_i * (max_discrete_levels_ft - 1), tf.int32), 0, max_discrete_levels-2)
+    l_i_fs = l_i * (max_discrete_levels_ft - 1) - tf.cast(l_i_is, dtype=tf.float32)
     
-    l_i_i_0_l_g_i_0s = []
-    l_i_i_1_l_g_i_0s = []
-    for l_i_f, l_i_i, lpyramid in zip(l_i_fs, l_i_is, lpyramids):
-        l_i_i_0_l_g_i_0s.append(tf.squeeze(inner_slice_1d(l_i_i,     lpyramid, IMSZ=IMSZ)))
-        l_i_i_1_l_g_i_0s.append(tf.squeeze(inner_slice_1d(l_i_i + 1, lpyramid, IMSZ=IMSZ)))
-
+    l_i_i_0_l_g_i_0s = inner_slice_1d(l_i_is,     lpyramids, IMSZ=IMSZ)
+    l_i_i_1_l_g_i_0s = inner_slice_1d(l_i_is + 1, lpyramids, IMSZ=IMSZ)
+    
+    # make laplacian pyramid by interpolation
+    outLPyramids = (1 - l_i_fs) * l_i_i_0_l_g_i_0s + l_i_fs * l_i_i_1_l_g_i_0s
+    outLPyramids = tf.reduce_sum(outLPyramids,axis=1)
+    
     # Define the custom gradient
     def grad_fn(dy):
-
-        dy_l_l = dy[None,...]
-        dy_d_l = []
-        d_i = []
         # make laplacian pyramid by interpolation
-        for l_i_i_0_l_g_i_0, l_i_i_1_l_g_i_0, l_i_f, l_i_i in zip(l_i_i_0_l_g_i_0s, l_i_i_1_l_g_i_0s, l_i_fs, l_i_is):
-            d_i.append((  - 1) * l_i_i_0_l_g_i_0 + (    1) * l_i_i_1_l_g_i_0)
-            
-            l_i_i_0_l_g_i_0_ones = (1  - l_i_f) * tf.squeeze(set_inner_slice_1d(l_i_i,     lpyramid, IMSZ=IMSZ, ones=True))
-            l_i_i_1_l_g_i_0_ones = (     l_i_f) * tf.squeeze(set_inner_slice_1d(l_i_i + 1, lpyramid, IMSZ=IMSZ, ones=True))
-            
-            dy_d_l.append(l_i_i_0_l_g_i_0_ones + l_i_i_1_l_g_i_0_ones)
-        d_i = tf.stack(d_i,axis=0) #n, h, w, c
-        dy_d_l = tf.stack(dy_d_l,axis=0) #n, L, h, w, c
-        return dy[None,...] * d_i[:,None,...], dy_l_l * dy_d_l[:,:,None,...], None, None
+        d_i = (  - 1) * l_i_i_0_l_g_i_0s + (    1) * l_i_i_1_l_g_i_0s
+        l_i_i_0_l_g_i_0_ones = (1  - l_i_fs[:,:,None,...]) * set_inner_slice_1d(l_i_is,       lpyramids, IMSZ=IMSZ, ones=True)
+        l_i_i_1_l_g_i_0_ones = (     l_i_fs[:,:,None,...]) * set_inner_slice_1d(l_i_is+1,     lpyramids, IMSZ=IMSZ, ones=True)
+        dy_d_l = l_i_i_0_l_g_i_0_ones + l_i_i_1_l_g_i_0_ones
+        return dy[None,...] * d_i, dy[None,None,...] * dy_d_l, None, None
 
-    # make laplacian pyramid by interpolation
-    outLPyramid = None
-    for l_i_i_0_l_g_i_0, l_i_i_1_l_g_i_0, l_i_f in zip(l_i_i_0_l_g_i_0s, l_i_i_1_l_g_i_0s, l_i_fs):
-        outLPyramid_i = (1 - l_i_f) * l_i_i_0_l_g_i_0        + \
-                        (    l_i_f) * l_i_i_1_l_g_i_0
-        if(outLPyramid is None):
-            outLPyramid = outLPyramid_i
-        else:
-            outLPyramid += outLPyramid_i
-    return outLPyramid, grad_fn
+    return outLPyramids, grad_fn
 
 def deriv_slice(l_i, l_g, i, lpyramid, max_discrete_levels,IMSZ):
     #fetch i and g pixels and discretize

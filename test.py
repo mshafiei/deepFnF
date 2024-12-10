@@ -15,7 +15,7 @@ import time
 import cvgutils.Linalg as Linalg
 import cvgutils.Viz as viz
 from timeit import default_timer as timer
-from easydict import EasyDict as dotmap
+from easydict import EasyDict as edict
 
 @tf.function
 def eval_model_w_alpha(model, netinput, alpha):
@@ -74,7 +74,7 @@ def test_idx(datapath,data,k,c,logger,model):
     
     
     deepfnf_scaled = None
-    model_output = dotmap()
+    model_output = edict()
     start = timer()
     if(logger.opts.model == 'deepfnf_llf'):
         denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
@@ -97,21 +97,29 @@ def test_idx(datapath,data,k,c,logger,model):
         noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, data['color_matrix'], data['adapt_matrix'])
         net_ft_input = tf.concat((net_input, denoised_deepfnf), axis=-1)
-        inputs = dotmap()
+        inputs = edict()
         inputs.net_ft_input = net_ft_input
         inputs.noisy_flash_scaled = noisy_flash_scaled
         inputs.deepfnf_scaled = deepfnf_scaled
         inputs.color_matrix = data['color_matrix']
         inputs.adapt_matrix = data['adapt_matrix']
-        model_output = dotmap(model.forward(inputs))
+        model_output = edict(model.forward(inputs))
         model_output.denoise, model_output.alpha_map = model_output.output, model_output.llf_alpha_h[0]
         model_output.deepfnf_scaled = inputs.deepfnf_scaled
         gllf_guide = model_output.llf_guide
     else:
-        denoise = eval_model(model, net_input)
+        import timeit
+        timing_iterations = 3
+        fn = lambda: eval_model(model, edict(net_ft_input=net_input))
+        t = timeit.Timer(fn, setup=fn)
+        avg_time_sec = t.timeit(number=timing_iterations) / timing_iterations
+        print('avg_time_sec ', avg_time_sec)
+
+        # denoise = eval_model(model, edict(net_ft_input=net_input))
     end = timer()
     running_time = int((end - start)*1000)
-    model_output.denoised_deepfnf = denoised_deepfnf
+    if('denoised_deepfnf' in model_output):
+        model_output.denoised_deepfnf = denoised_deepfnf
 
     model_output.noisy_flash_scaled = tfu.camera_to_rgb(
             noisy_flash, data['color_matrix'], data['adapt_matrix'])
@@ -426,7 +434,8 @@ def test(model, model_path, datapath,logger):
                     #concatenate
                 else:
                     with tf.device('/gpu:0'):
-                        test_idx(datapath,data,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
+                        test_idx(datapath,data,k,c,logger,model)
+                        # test_idx(datapath,data,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
                         logger.dumpDictJson(metrics_list,'test_errors_samples','test')
                         logger.dumpDictJson(errors_dict,'test_errors','test')
                     
