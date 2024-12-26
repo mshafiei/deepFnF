@@ -3,6 +3,7 @@ from gllf import *
 from gllf import _resize
 from easydict import EasyDict as edict
 from gllf_halide import halide_gllf
+tf.config.run_functions_eagerly(True)
 def setup(testname,crop=False):
     input_fn = '/home/mohammad/Downloads/fft_combine/blurred.png'
     guide_fn = '/home/mohammad/Downloads/fft_combine/flash.png'
@@ -13,10 +14,11 @@ def setup(testname,crop=False):
     beta  = 1.0
     sigma = 1.0
     IMSZ = 448
-    im_i = imageio.imread(guide_fn).astype(np.float32) / 255.0
+    im_i = imageio.imread(input_fn).astype(np.float32) / 255.0
     im_g = imageio.imread(guide_fn).astype(np.float32) / 255.0
+    im_i[100:110,100:110,:] = -0.05
     alpha_h = tf.Variable(0.0)#np.array(tf.random.uniform(im_i.shape,0,1))
-    alpha_i = tf.Variable(-1.0)#np.array(tf.random.uniform(im_i.shape,0,1))
+    alpha_i = tf.Variable(0.0)#np.array(tf.random.uniform(im_i.shape,0,1))
     if(crop):
         IMSZ = 32
         im_i = tf.convert_to_tensor(im_i[None,128:128+IMSZ,128:128+IMSZ,:])
@@ -281,7 +283,7 @@ def test_compare_gllf_1d_tf_vs_2d(configs):
     imgs = tf.stack([configs.im_i, configs.im_g],axis=0)
     alphas = tf.stack([configs.alpha_i, configs.alpha_h],axis=0)
     
-    fn = lambda diffable_imgs: gllf_diffable_1d(diffable_imgs, alphas, configs.max_levels, configs.max_discrete_levels, betas=[configs.beta,0], sigmas=[configs.sigma,0], IMSZ=configs.IMSZ)
+    fn = lambda diffable_imgs: gllf_diffable_1d(diffable_imgs, alphas, configs.max_levels, configs.max_discrete_levels, betas=[configs.beta,0], sigmas=[configs.sigma,0], min_intensity=0.0, max_intensity=1.0, IMSZ=configs.IMSZ)
     
     
     fn_result_1d = fn(imgs)[0]
@@ -302,6 +304,6 @@ configs = setup('test_compare_grad_slice_1d',crop=False)
 # test_compare_alpha_0d_grad_slice_1d(configs)
 # test_compare_alpha_grad_slice_1d(configs)
 # test_compare_grad_slice_2d(configs)
-test_compare_gllf_2d_tf_vs_halide(configs)
-# test_compare_gllf_1d_tf_vs_2d(configs)
+# test_compare_gllf_2d_tf_vs_halide(configs)
+test_compare_gllf_1d_tf_vs_2d(configs)
 print('hi')

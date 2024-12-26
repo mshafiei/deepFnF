@@ -23,8 +23,33 @@ CONVERSION_MATRICES = {
             (0.0193324, 0.119193, 0.950444),
         ), dtype=np.float32
     ),
+    "rgb_to_yuv_matrix": np.array(
+        (
+            (0.299,      0.587,     0.114),
+            (-0.168736, -0.331264,  0.5),
+            (0.5,       -0.418688, -0.081312)
+        ), dtype=np.float32
+    ),
+    "rgb_to_yuv_offset": np.array(
+        (
+          (16./255., 128./255., 128./255.)
+        ), dtype=np.float32
+    ),
+    "yuv_to_rgb_matrix": np.array(
+        (
+            (1.0,   0.0,       1.402),
+            (1.0,  -0.344136, -0.714136),
+            (1.0,   1.772,     0.0)
+        ), dtype=np.float32
+    ),
+    "yuv_to_rgb_offset": np.array(
+        (
+          (16./255., 128./255., 128./255.)
+        ), dtype=np.float32
+    ),
+        
 }
-
+        
 
 def dim_image(
         ambient, min_alpha=0.02, max_alpha=0.2, alpha=None):
@@ -84,6 +109,32 @@ def camera_to_rgb(imgs, color_matrix, adapt_matrix):
     rgb = tf.transpose(rgb, [0, 2, 1])
     rgb = tf.reshape(rgb, imsp)
     return rgb
+
+def rgb_to_yuv(imgs):
+    b, c = tf.shape(imgs)[0], tf.shape(imgs)[-1]
+    imsp = tf.shape(imgs)
+    imgs = tf.reshape(tf.cast(imgs,np.float32), [b, -1, c])
+    imgs = tf.transpose(imgs, [0, 2, 1])
+
+    yuv = tf.linalg.matmul(CONVERSION_MATRICES['rgb_to_yuv_matrix'][None,...], imgs)
+    yuv += CONVERSION_MATRICES['rgb_to_yuv_offset'][None,...,None]
+    yuv = tf.transpose(yuv, [0, 2, 1])
+    yuv = tf.reshape(yuv, imsp)
+    return yuv
+
+def yuv_to_rgb(imgs):
+    b, c = tf.shape(imgs)[0], tf.shape(imgs)[-1]
+    imsp = tf.shape(imgs)
+    imgs = tf.reshape(tf.cast(imgs,np.float32), [b, -1, c])
+    imgs = tf.transpose(imgs, [0, 2, 1])
+    imgs -= CONVERSION_MATRICES['rgb_to_yuv_offset'][None,...,None]
+    rgb = tf.linalg.matmul(CONVERSION_MATRICES['yuv_to_rgb_matrix'][None,...], imgs)
+
+    rgb = tf.transpose(rgb, [0, 2, 1])
+    rgb = tf.reshape(rgb, imsp)
+    return rgb
+
+
 def gamma_correct_np(x):
     b = .0031308
     gamma = 1. / 2.4

@@ -150,13 +150,13 @@ class Net:
         out, _ = self.down_block(out, self.channel_count(1024), pfx + 'down5')
         out, _ = self.down_block(out, self.channel_count(512), pfx + 'down5')
         out, _ = self.down_block(out, self.channel_count(256), pfx + 'down5')
-        out = self.conv(pfx + 'bottleneck_1', out, self.channel_count(128))
-        out = self.conv(pfx + 'bottleneck_2', out, self.channel_count(64))
-        out = self.conv(pfx + 'bottleneck_3', out, self.channel_count(32))
-        out = self.conv(pfx + 'bottleneck_4', out, self.channel_count(16))
-        out = self.conv(pfx + 'bottleneck_5', out, self.channel_count(8))
-        out = self.conv(pfx + 'bottleneck_6', out, self.channel_count(4))
-        out = self.conv(pfx + 'bottleneck_7', out, self.channel_count(2), activation_name=pfx + 'bottleneck')
+        out = self.conv(pfx + 'bottleneck_1', out, self.channel_count(128),relu=False)
+        out = self.conv(pfx + 'bottleneck_2', out, self.channel_count(64),relu=False)
+        out = self.conv(pfx + 'bottleneck_3', out, self.channel_count(32),relu=False)
+        out = self.conv(pfx + 'bottleneck_4', out, self.channel_count(16),relu=False)
+        out = self.conv(pfx + 'bottleneck_5', out, self.channel_count(8),relu=False)
+        out = self.conv(pfx + 'bottleneck_6', out, self.channel_count(4),relu=False)
+        out = self.conv(pfx + 'bottleneck_7', out, self.channel_count(2),relu=False, activation_name=pfx + 'bottleneck')
 
         return out
 

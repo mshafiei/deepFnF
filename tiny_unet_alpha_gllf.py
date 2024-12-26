@@ -55,7 +55,7 @@ class Net(tiny_unet):
         tensor_shapes = diffable_alphas.output.shape
         diffable_alphas = tf.reshape(diffable_alphas.output, tensor_shapes[:-1] + [3, 2])
 
-        source_images = [tf.clip_by_value(inp.noisy_ambient_scaled,0,1000),tf.clip_by_value(inp.noisy_flash_scaled,0,1000)]
+        source_images = [tf.clip_by_value(inp.noisy_ambient_scaled,clip_value_min=0,clip_value_max=1000),tf.clip_by_value(inp.noisy_flash_scaled,clip_value_min=0,clip_value_max=1000)]
         alphas = [diffable_alphas[...,0],diffable_alphas[...,1]]
         output.output = self.gllf(source_images, alphas)
         output.alpha_map_i = alphas[0]

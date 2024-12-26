@@ -16,7 +16,11 @@ class Net(tiny_unet):
 
     def encode(self, out, pfx=''):
         skips = edict()
+        
         out = self.conv(pfx + 'inp', out, self.channel_count(64))
+        for i in range(self.downsample_ct):
+            out = self.conv(pfx + 'inp_%i'%i, out, self.channel_count(64*2**(i+1)))
+            
 
         if(self.downsample_ct == 0):
             out, skips.d1 = self.down_block(out, self.channel_count(64  ), pfx + 'down1')
@@ -34,6 +38,7 @@ class Net(tiny_unet):
         return out, skips
     
     def decode(self, out, skips, pfx=''):
+        assert self.downsample_ct<=3
         out = self.up_block(out, self.channel_count(512), skips.d5, pfx + 'up1')
         if(self.downsample_ct <= 3):
             out = self.up_block(out, self.channel_count(256), skips.d4, pfx + 'up2')
@@ -43,6 +48,9 @@ class Net(tiny_unet):
             out = self.up_block(out, self.channel_count(64 ), skips.d2, pfx + 'up4')
         if(self.downsample_ct <= 0):
             out = self.up_block(out, self.channel_count(64 ), skips.d1, pfx + 'up5')
+
+        for i in range(self.downsample_ct-1,1,-1):
+            out = self.conv(pfx + 'end_conv_%i'%i, out, self.channel_count(64*i), relu=False)#128 or 64
 
         out = self.conv(pfx + 'end_1', out, self.channel_count_end(64), relu=False)
         out = self.conv(pfx + 'end_2', out, self.channel_count_end(32), relu=False)
@@ -56,9 +64,11 @@ class Net(tiny_unet):
         _, h, w, _ = inp.net_ft_input.shape
         input = inp.net_ft_input
         #downsample
-        input = tf.image.resize(input,(h//(2**self.downsample_ct), w//(2**self.downsample_ct)))
+        if(self.downsample_ct > 0):
+            input = tf.image.resize(input,(h//(2**self.downsample_ct), w//(2**self.downsample_ct)))
         out, skips = self.encode(input)
-        out = self.decode(out, skips)
-        output = tf.image.resize(out,(h, w))
+        output = self.decode(out, skips)
+        if(self.downsample_ct > 0):
+            output = tf.image.resize(output,(h, w))
         #upsample
         return edict(output=output)

@@ -36,7 +36,7 @@ from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as edict
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -69,7 +69,7 @@ IMSZ = 448
 LR = 1e-4
 DROP = (1.1e6, 1.25e6) # Learning rate drop
 
-MAXITER = 1.5e6
+MAXITER = opts.max_iter
 displacement = opts.displacement
 VALFREQ = opts.val_freq
 SAVEFREQ = opts.save_freq
@@ -127,7 +127,7 @@ with tf.device('/cpu:0'):
     else:
         dataset = Dataset(TLIST, VPATH, bsz=BSZ, psz=IMSZ, ngpus=opts.ngpus, nthreads=4 * opts.ngpus,jitter=opts.displacement,min_scale=opts.min_scale,max_scale=opts.max_scale,theta=opts.max_rotate)
     opt = tf.keras.optimizers.Adam(learning_rate=learning_rate_fn)
-    # opt = tf.keras.optimizers.Adam(learning_rate=LR)
+    
     
 with tf.device('/gpu:0'):
     niter = 0
@@ -226,7 +226,13 @@ with tf.device('/gpu:0'):
             example['ambient'],
             example['color_matrix'], example['adapt_matrix'])
         
-        model_input.update(edict(noisy_ambient_scaled=outputs.noisy_ambient_scaled,noisy_flash=outputs.noisy_flash, net_ft_input=outputs.net_ft_input, noisy_flash_scaled=outputs.noisy_flash_scaled, color_matrix=example['color_matrix'], adapt_matrix=example['adapt_matrix']))
+        model_input.update(edict(noisy_ambient_scaled=outputs.noisy_ambient_scaled,
+                                 noisy_flash=outputs.noisy_flash, 
+                                 net_ft_input=outputs.net_ft_input, 
+                                 noisy_flash_scaled=outputs.noisy_flash_scaled,
+                                 color_matrix=example['color_matrix'],
+                                 adapt_matrix=example['adapt_matrix'],
+                                 alpha=example['alpha']))
         output_dict=edict(model_input)
         model_input.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
             img / alpha, example['color_matrix'], example['adapt_matrix'])
@@ -264,7 +270,7 @@ with tf.device('/gpu:0'):
             net_ft_input = tf.concat((net_input, net_inp.denoise), axis=-1)
             net_inp.deepfnf_scaled = tfu.camera_to_rgb(
             net_inp.denoise / alpha, example['color_matrix'], example['adapt_matrix'])
-            psnr_deepfnf = tfu.get_psnr(net_inp.deepfnf_scaled, net_inp.ambient_scaled)
+            psnr_deepfnf = tfu.get_psnr(tf.maximum(net_inp.deepfnf_scaled,0), tf.maximum(net_inp.ambient_scaled,0))
             losses.psnr_deepfnf = psnr_deepfnf
             if(validation):
                 wlpips_deepfnf = wlpips([net_inp.deepfnf_scaled, net_inp.ambient_scaled])
@@ -278,6 +284,7 @@ with tf.device('/gpu:0'):
         net_inp.net_ft_input = net_ft_input
         net_inp.color_matrix = example['color_matrix']
         net_inp.adapt_matrix = example['adapt_matrix']
+        net_inp.alpha = example['alpha']
         output = edict(net_inp)
         net_inp.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
             img / alpha, example['color_matrix'], example['adapt_matrix'])
@@ -333,6 +340,7 @@ with tf.device('/gpu:0'):
         model_inputs.net_ft_input = net_ft_input
         model_inputs.color_matrix = example['color_matrix']
         model_inputs.adapt_matrix = example['adapt_matrix']
+        model_inputs.alpha = example['alpha']
         model_inputs.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
             img / alpha, example['color_matrix'], example['adapt_matrix'])
         model_inputs.flash_wb_fn = lambda img: tfu.camera_to_rgb(
@@ -345,10 +353,11 @@ with tf.device('/gpu:0'):
             # double_deepfnf.output = tfu.camera_to_rgb(double_deepfnf.output,
             # example['color_matrix'], example['adapt_matrix'])
             # Loss
-            l2_loss = tf.convert_to_tensor(0.0) if opts.l2 == 0 else tfu.l2_loss(double_deepfnf.output, model_inputs.ambient_scaled)
-            gradient_loss = tf.convert_to_tensor(0.0) if opts.grad == 0 else tfu.gradient_loss(double_deepfnf.output, model_inputs.ambient_scaled)
-            wlpips_loss = tf.convert_to_tensor(0.0) if opts.wlpips == 0 else wlpips([double_deepfnf.output, model_inputs.ambient_scaled])[0]
-            lpips_loss = tf.convert_to_tensor(0.0) if opts.lpips == 0 else lpips([double_deepfnf.output, model_inputs.ambient_scaled])[0]
+            
+            l2_loss = tf.convert_to_tensor(0.0) if opts.l2 == 0 else tfu.l2_loss(double_deepfnf.output, tf.maximum(model_inputs.ambient_scaled,0))
+            gradient_loss = tf.convert_to_tensor(0.0) if opts.grad == 0 else tfu.gradient_loss(double_deepfnf.output, tf.clip_by_value(model_inputs.ambient_scaled,0,1))
+            wlpips_loss = tf.convert_to_tensor(0.0) if opts.wlpips == 0 else wlpips([double_deepfnf.output, tf.clip_by_value(model_inputs.ambient_scaled,0,1)])[0]
+            lpips_loss = tf.convert_to_tensor(0.0) if opts.lpips == 0 else lpips([double_deepfnf.output, tf.clip_by_value(model_inputs.ambient_scaled,0,1)])[0]
             
             # lpips_loss = tf.stop_gradient(lpips([denoise, ambient]))
             loss = opts.l2 * l2_loss + opts.grad * gradient_loss + opts.lpips * lpips_loss + opts.wlpips * wlpips_loss
@@ -359,8 +368,13 @@ with tf.device('/gpu:0'):
         if('llf_guide' in double_deepfnf):
             double_deepfnf.llf_guide = tfu.camera_to_rgb(double_deepfnf.llf_guide,
                 example['color_matrix'], example['adapt_matrix'])
-
+        
         gradients = tape.gradient(loss, model.weights.values())
+        # keys = list(model.weights.keys())
+        # vals = list(model.weights.values())
+        # for idx in range(len(vals)):
+        #     if('alpha' in keys[idx]):
+        #         gradients[idx] *= 0.0
         # tf.print(gradients)
         opt.apply_gradients(zip(gradients,model.weights.values()))
         psnr_metric = tfu.get_psnr(double_deepfnf.output, model_inputs.ambient_scaled)
@@ -395,6 +409,7 @@ with tf.device('/gpu:0'):
         model_inputs.net_ft_input = net_ft_input
         model_inputs.color_matrix = example['color_matrix']
         model_inputs.adapt_matrix = example['adapt_matrix']
+        model_inputs.alpha = example['alpha']
 
         model_inputs.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
             img / alpha, example['color_matrix'], example['adapt_matrix'])

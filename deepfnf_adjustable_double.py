@@ -70,7 +70,8 @@ class Net(tiny_unet):
         _, h, w, _ = inp.shape
         input = inp
         #downsample
-        input = tf.image.resize(input,(h//(2**self.downsample_ct), w//(2**self.downsample_ct)))
+        if(self.downsample_ct > 0):
+            input = tf.image.resize(input,(h//(2**self.downsample_ct), w//(2**self.downsample_ct)))
         out, skips = self.encode(input)
         out = self.decode(out, skips)
         #upsample
@@ -144,8 +145,8 @@ class Net(tiny_unet):
         # smoothed_ambient = tfu.apply_dilated_filtering(
         #     smoothed_ambient, self.kernels[..., 1], dilation=4)
         # filtered_ambient = filtered_ambient + smoothed_ambient
-        self.filtered_ambient = (filtered_images[...,:3] * self.scale[...,:3])
-        self.filtered_flash = (filtered_images[...,3:] * self.scale[...,3:])
+        self.filtered_ambient = (filtered_images[...,:3])
+        self.filtered_flash = (filtered_images[...,3:])
         if(inp_is_edict):
             output=edict()
             output.output = self.filtered_ambient + self.filtered_flash
