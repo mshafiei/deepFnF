@@ -95,7 +95,7 @@ def gamma_correct(x):
     return srgb
 
 
-def camera_to_rgb(imgs, color_matrix, adapt_matrix):
+def camera_to_rgb(imgs, color_matrix, adapt_matrix, do_gamma_correct=True):
     b, c = tf.shape(imgs)[0], tf.shape(imgs)[-1]
     imsp = tf.shape(imgs)
     imgs = tf.reshape(tf.cast(imgs,np.float32), [b, -1, c])
@@ -104,7 +104,8 @@ def camera_to_rgb(imgs, color_matrix, adapt_matrix):
     xyz = tf.linalg.solve(color_matrix, imgs)
     xyz = tf.linalg.matmul(adapt_matrix, xyz)
     rgb = tf.linalg.matmul(CONVERSION_MATRICES['xyz_to_rgb'][None,...], xyz)
-    rgb = gamma_correct(rgb)
+    if(do_gamma_correct):
+      rgb = gamma_correct(rgb)
 
     rgb = tf.transpose(rgb, [0, 2, 1])
     rgb = tf.reshape(rgb, imsp)

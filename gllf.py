@@ -199,10 +199,17 @@ def reconstruct_Laplacian(outLPyramid, max_levels):
     return g[0]
 
 
-def remapping_1d(i, k, sigma, beta, alpha, n_levels,min_intensity=0.0, max_intensity=1.0):
+def remapping_1d(i, k, sigma, beta, alpha, threshold, n_levels,min_intensity=0.0, max_intensity=1.0):
     level = k / (n_levels - 1)
-    level = level * (max_intensity - min_intensity) - min_intensity
-    return sigma * level + beta * (i - level) + remap(i - level, alpha)
+    level = level * (max_intensity - min_intensity) + min_intensity
+    diff = i - level
+    if(threshold is None):
+        return sigma * level + beta * diff + remap(diff, alpha)
+    else:
+        compress = sigma * level + tf.sign(diff) * (beta * (tf.abs(diff)-threshold)+threshold)
+        # details = sigma * level + tf.sign(diff) * threshold * tf.pow(tf.abs(diff)/threshold, alpha)
+        details = sigma * level + beta * diff + remap(diff, alpha)
+        return tf.where(tf.abs(diff) < threshold, details, compress)
 
 def images_to_lookup_1d(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, min_intensity, max_intensity, IMSZ=448):
     # compute remapped images and its pyramids
@@ -223,16 +230,18 @@ def images_to_lookup_1d(im_is, max_levels, max_discrete_levels, alphas, betas, s
     return lpyramid
 
 @tf.function
-def images_to_lookup_1d_noresize(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, min_intensity, max_intensity, IMSZ=448):
+def images_to_lookup_1d_noresize(im_is, max_levels, max_discrete_levels, alphas, betas, sigmas, min_intensity, max_intensity, thresholds=None, IMSZ=448):
     #in this function
     #K is intensity sample count max_discrete_levels
     #L is level count max_levels
     # compute remapped images and its pyramids
+    if(thresholds is None):
+        thresholds = [None] * len(im_is)
     lpyramid = [[[] for _ in range(len(im_is))] for _ in range(max_levels)]
     for k_i in range(max_discrete_levels):
         for im_idx in range(len(im_is)):
-            im_i, alpha, beta, sigma = im_is[im_idx], alphas[im_idx], betas[im_idx], sigmas[im_idx]
-            r_i_j = remapping_1d(im_i, k_i, sigma, beta, alpha, max_discrete_levels,min_intensity=min_intensity, max_intensity=max_intensity)
+            im_i, alpha, beta, sigma, threshold = im_is[im_idx], alphas[im_idx], betas[im_idx], sigmas[im_idx], thresholds[im_idx]
+            r_i_j = remapping_1d(im_i, k_i, sigma, beta, alpha, threshold, max_discrete_levels,min_intensity=min_intensity, max_intensity=max_intensity)
             f_i_j_g = GaussianPyramid(r_i_j, max_levels)
             f_i_j_l = LaplacianPyramid(f_i_j_g)# K, 1, h, w, c
             for f_i_j_l_i, f_i_j_l_v in enumerate(f_i_j_l):
@@ -300,8 +309,8 @@ def images_to_lookup_2d(im_i, im_g, max_levels, max_discrete_levels, alpha_h, al
     return lpyramid
     
 @tf.function
-def gllf_diffable_1d(im_is, alphas, max_levels, max_discrete_levels, betas, sigmas,min_intensity=0.0, max_intensity=1.0, IMSZ=448):
-    outLPyramids = images_to_lookup_1d_noresize(im_is, max_levels, max_discrete_levels, alphas, IMSZ=IMSZ, betas=betas, sigmas=sigmas,min_intensity=min_intensity, max_intensity=max_intensity)
+def gllf_diffable_1d(im_is, alphas, max_levels, max_discrete_levels, betas, sigmas,thresholds=None,min_intensity=0.0, max_intensity=1.0, IMSZ=448):
+    outLPyramids = images_to_lookup_1d_noresize(im_is, max_levels, max_discrete_levels, alphas, thresholds=thresholds,IMSZ=IMSZ, betas=betas, sigmas=sigmas,min_intensity=min_intensity, max_intensity=max_intensity)
     G_is = [[[] for _ in range(len(im_is))] for _ in range(max_levels)]
     for im_idx in range(len(im_is)):
         im_i_pyramid = im_is[im_idx]

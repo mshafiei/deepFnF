@@ -10,7 +10,7 @@ from easydict import EasyDict as edict
 from gllf import gllf_diffable_1d
 
 class Net(tiny_unet):
-    def __init__(self, yuv_gllf, gllf_scalar, alphas, betas, sigmas, llf_levels, IMSZ, deepfnf_upscaling=False,source_images=1, downsample_ct=0, unet_output_size=6, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, yuv_gllf, gllf_scalar, alphas, betas, sigmas, llf_intensity_levels, llf_levels, IMSZ, deepfnf_upscaling=False,source_images=1, downsample_ct=0, unet_output_size=6, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
         super().__init__(downsample_ct=downsample_ct, unet_output_size=unet_output_size, num_basis=num_basis, ksz=ksz, burst_length=burst_length, channels_count_factor=channels_count_factor)
         self.deepfnf_upscaling=deepfnf_upscaling
         self.kernel_channels=1
@@ -25,20 +25,21 @@ class Net(tiny_unet):
         self.scalar_betas_options = betas
         self.scalar_sigmas_options = sigmas
         self.llf_levels = llf_levels
+        self.llf_intensity_levels = llf_intensity_levels
         self.IMSZ = IMSZ
         
         self.coeff_count = self.num_basis * self.burst_length
         self.scale_count = 3*self.burst_length*4
         self.alpha_count = 3*4*3
 
-    def gllf(self, diffable_imgs, diffable_alphas, betas, sigmas):
+    def gllf(self, diffable_imgs, diffable_alphas, betas, sigmas, thresholds):
         imgs = []
         for im in diffable_imgs:
             if(self.yuv_gllf):
                 imgs.append(tfu.rgb_to_yuv(im))
             else:
                 imgs.append(im)
-        output = gllf_diffable_1d(imgs, diffable_alphas, self.llf_levels, self.llf_levels, betas=betas, sigmas=sigmas, IMSZ=self.IMSZ)
+        output = gllf_diffable_1d(imgs, diffable_alphas, self.llf_levels, self.llf_intensity_levels, thresholds=thresholds, betas=betas, sigmas=sigmas, min_intensity=0.0, max_intensity=1.0, IMSZ=self.IMSZ)
         if(self.yuv_gllf):
             return tfu.yuv_to_rgb(output)
         else:
@@ -192,41 +193,47 @@ class Net(tiny_unet):
         #     smoothed_ambient, self.kernels[..., 1], dilation=4)
         # filtered_ambient = filtered_ambient + smoothed_ambient
         filtered_ambient = (filtered_images[...,:3])# * scale_ratio
-        filtered_ambient_scaled = tfu.camera_to_rgb(
-            filtered_ambient / alpha, color_matrix, adapt_matrix)
-        
         filtered_flash = (filtered_images[...,3:])
+        
+        filtered_ambient_scaled = tfu.camera_to_rgb(
+            filtered_ambient / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
+        
         filtered_flash_scaled = tfu.camera_to_rgb(
-            filtered_flash, color_matrix, adapt_matrix)
+            filtered_flash, color_matrix, adapt_matrix, do_gamma_correct=False)
 
         if(np.sum(self.scalar_alphas_options) == 0 and np.sum(self.scalar_betas_options) == 0 and np.sum(self.scalar_sigmas_options) == 0):
-            return edict(output=filtered_ambient + filtered_flash)
+            bpn_out=tfu.gamma_correct(filtered_ambient_scaled + filtered_flash_scaled)
+            return edict(output=bpn_out)
+
+
 
         ambient_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix)
+            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
         flash_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, 3:6], color_matrix, adapt_matrix)
+            inp[:, :, :, 3:6], color_matrix, adapt_matrix, do_gamma_correct=False)
         
         # ambient_scaled = tf.clip_by_value(ambient_scaled,0,1)
-        flash_scaled = tf.clip_by_value(flash_scaled,0,1)
+        # flash_scaled = tf.clip_by_value(flash_scaled,0,1)
         
         # source_images = [tf.clip_by_value(filtered_ambient_scaled,0,1000),tf.clip_by_value(filtered_flash_scaled,0,1000)]
         source_images = [filtered_ambient_scaled, filtered_flash_scaled, ambient_scaled, flash_scaled]
         alphas = [self.scalar_alphas_options[0], self.scalar_alphas_options[1], self.scalar_alphas_options[2], self.scalar_alphas_options[3]]
         betas = [self.scalar_betas_options[0], self.scalar_betas_options[1], self.scalar_betas_options[2], self.scalar_betas_options[3]]
         sigmas = [self.scalar_sigmas_options[0], self.scalar_sigmas_options[1], self.scalar_sigmas_options[2], self.scalar_sigmas_options[3]]
+        thresholds = [None, None, 0.1, None]
         # if(self.gllf_scalar):
         #     alphas = [self.scalar_alphas_options[0] * self.scalar_alphas[0,0], self.scalar_alphas_options[1] * self.scalar_alphas[0,1], self.scalar_alphas_options[2] * self.scalar_alphas[0,2],  self.scalar_alphas_options[3] * self.scalar_alphas[0,3]]
-        #     betas =  [1, self.scalar_betas_options[1]  * self.scalar_alphas[0,5], self.scalar_betas_options[2]  * self.scalar_alphas[0,6],  self.scalar_betas_options[3]  * self.scalar_alphas[0,7]]
-        #     sigmas = [1, self.scalar_sigmas_options[1] * self.scalar_alphas[0,9], self.scalar_sigmas_options[2] * self.scalar_alphas[0,10], self.scalar_sigmas_options[3] * self.scalar_alphas[0,11]]
+        #     betas =  [1,                                                       self.scalar_betas_options[1]  * self.scalar_alphas[0,5], self.scalar_betas_options[2]  * self.scalar_alphas[0,6],  self.scalar_betas_options[3]  * self.scalar_alphas[0,7]]
+        #     sigmas = [1,                                                       self.scalar_sigmas_options[1] * self.scalar_alphas[0,9], self.scalar_sigmas_options[2] * self.scalar_alphas[0,10], self.scalar_sigmas_options[3] * self.scalar_alphas[0,11]]
         # else:
-        #     alphas = [self.scalar_alphas_options[0] * self.alphas[...,:3], self.scalar_alphas_options[1] * self.alphas[...,3:6], self.scalar_alphas_options[2] * self.alphas[...,6:9],  self.scalar_alphas_options[3] * self.alphas[...,9:12]]
-        #     betas =  [1, self.scalar_betas_options[1]  * self.alphas[...,12:15], self.scalar_betas_options[2]  * self.alphas[...,15:18],  self.scalar_betas_options[3]  * self.alphas[...,18:21]]
-        #     sigmas = [1, self.scalar_sigmas_options[1] * self.alphas[...,21:24], self.scalar_sigmas_options[2] * self.alphas[...,24:27], self.scalar_sigmas_options[3] * self.alphas[...,27:30]]
+        #     alphas = [self.scalar_alphas_options[0] * self.alphas[...,:3], self.scalar_alphas_options[1] * self.alphas[...,3:6],   self.scalar_alphas_options[2] * self.alphas[...,6:9],    self.scalar_alphas_options[3] * self.alphas[...,9:12]]
+        #     betas =  [1,                                                   self.scalar_betas_options[1]  * self.alphas[...,12:15], self.scalar_betas_options[2]  * self.alphas[...,15:18],  self.scalar_betas_options[3]  * self.alphas[...,18:21]]
+        #     sigmas = [1,                                                   self.scalar_sigmas_options[1] * self.alphas[...,21:24], self.scalar_sigmas_options[2] * self.alphas[...,24:27],  self.scalar_sigmas_options[3] * self.alphas[...,27:30]]
             
         if(inp_is_edict):
             output=edict()
-            output.output = self.gllf(source_images, alphas, betas, sigmas)
+            output.output = self.gllf(source_images, alphas, betas, sigmas, thresholds)
+            output.output = tfu.gamma_correct(output.output)
             return output
         else:
             return filtered_ambient + filtered_flash

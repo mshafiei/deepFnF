@@ -66,7 +66,7 @@ TLIST = opts.TLIST
 VPATH = opts.VPATH
 BSZ = 1
 IMSZ = 448
-LR = 1e-4
+LR = opts.learning_rate
 DROP = (1.1e6, 1.25e6) # Learning rate drop
 
 MAXITER = opts.max_iter
@@ -313,7 +313,7 @@ with tf.device('/gpu:0'):
         print("function %s took %fms" % (fn_name,(avg_time_sec * 1e3)))
 
     @tf.function
-    def train_step(net_input, alpha, noisy_flash, noisy_ambient, example,double_network=True):
+    def train_step(net_input, alpha, noisy_flash, noisy_ambient, example, alpha_coeffs, double_network=True):
         model_inputs = edict()
         
         model_inputs.noisy_ambient_scaled =  tfu.camera_to_rgb(noisy_ambient / alpha,
@@ -374,8 +374,8 @@ with tf.device('/gpu:0'):
         # vals = list(model.weights.values())
         # for idx in range(len(vals)):
         #     if('alpha' in keys[idx]):
-        #         gradients[idx] *= 0.0
-        # tf.print(gradients)
+        #         gradients[idx] = alpha_coeffs
+        
         opt.apply_gradients(zip(gradients,model.weights.values()))
         psnr_metric = tfu.get_psnr(double_deepfnf.output, model_inputs.ambient_scaled)
         losses = {'loss':loss, 'l2_loss':l2_loss, 'gradient_loss':gradient_loss,
@@ -422,7 +422,14 @@ with tf.device('/gpu:0'):
     def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example, double_network):
         if(niter <= 10):
             eval_latency_prepare(net_input, alpha, noisy_flash, noisy_ambient, example, double_network)
-        losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example, double_network)
+        alpha_coeffs = 1.
+        # if(niter < 500):
+        #     alpha_coeffs = 0.1
+        # elif(niter < 1000):
+        #     alpha_coeffs = 0.5
+        # else:
+        #     alpha_coeffs = 1
+        losses = train_step(net_input, alpha, noisy_flash, noisy_ambient, example, alpha_coeffs, double_network)
 
         # Save model weights if needed
         if SAVEFREQ > 0 and niter % SAVEFREQ == 0:
@@ -458,28 +465,33 @@ with tf.device('/gpu:0'):
             if(double_network):
                 images.update({'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0]})
                 lbls.update({'denoised_deepfnf':'DeepFnF'})
-            if('alpha_map_h' in val_output.model_output):
-                alpha_map_h = cv2.resize(val_output.model_output.alpha_map_h.numpy()[0], (448,448))[None,...]
-                # gllf = gllf.numpy()[0] * 2.0**exposure
-                annotation =  None if opts.llf_sigma == 0 else annotation
-                alpha_h_min = tf.reduce_min(alpha_map_h)
-                alpha_h_max = tf.reduce_max(alpha_map_h)
-                alpha_map_h = (alpha_map_h - alpha_h_min) / (alpha_h_max - alpha_h_min)
-                images.update({'alpha_map_h':alpha_map_h})
-                lbls.update({'alpha_map_h':'$\\huge{\\alpha_h \\in [%.02f,%.02f]}$'%(alpha_h_min, alpha_h_max)})
-            if('alpha_map_i' in val_output.model_output):
-                alpha_map_i = cv2.resize(val_output.model_output.alpha_map_i.numpy()[0], (448,448))[None,...]
-                alpha_i_min = tf.reduce_min(alpha_map_i)
-                alpha_i_max = tf.reduce_max(alpha_map_i)
-                alpha_map_i = (alpha_map_i - alpha_i_min) / (alpha_i_max - alpha_i_min)
-                images.update({'alpha_map_i':alpha_map_i})
-                lbls.update({'alpha_map_i':'$\\huge{\\alpha_i \\in [%.02f,%.02f]}$'%(alpha_i_min, alpha_i_max)})
-            if("llf_guide" in val_output.model_output):
-                images.update({'llf_guide':val_output.model_output.llf_guide.numpy()})
-                lbls.update({'llf_guide':'I_h'})
-            if("llf_input" in val_output.model_output):
-                images.update({'llf_input':val_output.model_output.llf_input.numpy()})
-                lbls.update({'llf_input':'I_i'})
+            for k,v in val_output.model_output.items():
+                if('visualize' in k):
+                    visualize_image = cv2.resize(v.image.numpy()[0], (448,448))[None,...]
+                    images.update({k:visualize_image})
+                    lbls.update({k:v.label})
+            # if('alpha_map_h' in val_output.model_output):
+            #     alpha_map_h = cv2.resize(val_output.model_output.alpha_map_h.numpy()[0], (448,448))[None,...]
+            #     # gllf = gllf.numpy()[0] * 2.0**exposure
+            #     annotation =  None if opts.llf_sigma == 0 else annotation
+            #     alpha_h_min = tf.reduce_min(alpha_map_h)
+            #     alpha_h_max = tf.reduce_max(alpha_map_h)
+            #     alpha_map_h = (alpha_map_h - alpha_h_min) / (alpha_h_max - alpha_h_min)
+            #     images.update({'alpha_map_h':alpha_map_h})
+            #     lbls.update({'alpha_map_h':'$\\huge{\\alpha_h \\in [%.02f,%.02f]}$'%(alpha_h_min, alpha_h_max)})
+            # if('alpha_map_i' in val_output.model_output):
+            #     alpha_map_i = cv2.resize(val_output.model_output.alpha_map_i.numpy()[0], (448,448))[None,...]
+            #     alpha_i_min = tf.reduce_min(alpha_map_i)
+            #     alpha_i_max = tf.reduce_max(alpha_map_i)
+            #     alpha_map_i = (alpha_map_i - alpha_i_min) / (alpha_i_max - alpha_i_min)
+            #     images.update({'alpha_map_i':alpha_map_i})
+            #     lbls.update({'alpha_map_i':'$\\huge{\\alpha_i \\in [%.02f,%.02f]}$'%(alpha_i_min, alpha_i_max)})
+            # if("llf_guide" in val_output.model_output):
+            #     images.update({'llf_guide':val_output.model_output.llf_guide.numpy()})
+            #     lbls.update({'llf_guide':'I_h'})
+            # if("llf_input" in val_output.model_output):
+            #     images.update({'llf_input':val_output.model_output.llf_input.numpy()})
+            #     lbls.update({'llf_input':'I_i'})
 
             if('filename' in example.keys()):
                 logger.addImage(images, lbls,'train',cols=5, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
