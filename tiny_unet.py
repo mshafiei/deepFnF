@@ -7,12 +7,9 @@ import utils.tf_utils as tfu
 from easydict import EasyDict as edict
 
 class Net:
-    def __init__(self, unet_output_size=3, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
+    def __init__(self, unet_output_size=3, channels_count_factor=1):
         self.weights = {}
         self.activations = OrderedDict()
-        self.num_basis = num_basis
-        self.ksz = ksz
-        self.burst_length = burst_length
         self.channels_count_factor = channels_count_factor
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor))
         self.output_dim_size = unet_output_size
@@ -20,7 +17,7 @@ class Net:
 
     def conv(
             self, name, inp, outch, ksz=3,
-            stride=1, relu=True, pad='SAME', activation_name=None):
+            stride=1, relu=True, softplus=False, sigmoid=False, pad='SAME', activation_name=None):
         '''Wrapper of conv'''
         inch = inp.get_shape().as_list()[-1]
         ksz = [ksz, ksz, inch, outch]
@@ -46,6 +43,12 @@ class Net:
 
         if relu:
             out = tf.nn.relu(out)
+
+        if softplus:
+            out = tf.nn.softplus(out)
+        
+        if sigmoid:
+            out = tf.nn.sigmoid(out)
 
         if activation_name is not None:
             self.activations[activation_name] = out

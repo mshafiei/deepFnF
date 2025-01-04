@@ -22,6 +22,7 @@ from net_no_scalemap import Net as NetNoScaleMap
 from net_grad import Net as NetGrad
 # from net_slim import Net as NetSlim
 import gllf_network_utils as net_utils
+from gllf.gllf_utils import prepare_input
 import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
@@ -161,43 +162,6 @@ with tf.device('/gpu:0'):
     print("===================== Model summary =====================")
 
     #verify finite difference
-      
-
-    @tf.function
-    def prepare_input(example, clamp=False, std_input=True):
-        alpha = example['alpha']
-        dimmed_ambient, _ = tfu.dim_image(
-            example['ambient'], alpha=alpha)
-        dimmed_warped_ambient, _ = tfu.dim_image(
-            example['warped_ambient'], alpha=alpha)
-
-        # Make the flash brighter by increasing the brightness of the
-        # flash-only image.
-        flash = example['flash_only'] * ut.FLASH_STRENGTH + dimmed_ambient
-        warped_flash = example['warped_flash_only'] * \
-            ut.FLASH_STRENGTH + dimmed_warped_ambient
-
-        sig_read = example['sig_read']
-        sig_shot = example['sig_shot']
-        noisy_ambient, _, _ = tfu.add_read_shot_noise(
-            dimmed_ambient, sig_read=sig_read, sig_shot=sig_shot)
-        noisy_flash, _, _ = tfu.add_read_shot_noise(
-            warped_flash, sig_read=sig_read, sig_shot=sig_shot)
-
-        if(clamp):
-            noisy_ambient = tf.maximum(noisy_ambient,0)
-            noisy_flash = tf.maximum(noisy_flash,0)
-        
-        noisy = tf.concat([noisy_ambient, noisy_flash], axis=-1)
-        if(std_input):
-            
-            noise_std = tfu.estimate_std(noisy, sig_read, sig_shot)
-            net_input = tf.concat([noisy, noise_std], axis=-1)
-        else:
-            net_input = noisy
-
-        return net_input, alpha, noisy_flash, noisy_ambient
-
 
     @tf.function
     def val_step(net_input, alpha, noisy_flash, noisy_ambient, example, double_network=True):
@@ -246,7 +210,7 @@ with tf.device('/gpu:0'):
         return outputs, output_dict
 
 
-    @tf.function
+    
     def predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example, validation=True, double_network=True):
         net_inp = edict()
         losses = edict()
@@ -420,7 +384,7 @@ with tf.device('/gpu:0'):
         eval_latency(fn, opts.model)
         
     def training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, example, double_network):
-        if(niter <= 10):
+        if(opts.eval_latency and niter <= 3):
             eval_latency_prepare(net_input, alpha, noisy_flash, noisy_ambient, example, double_network)
         alpha_coeffs = 1.
         # if(niter < 500):
@@ -462,6 +426,13 @@ with tf.device('/gpu:0'):
             
             images = {'flash':model_inputs.noisy_flash_scaled.numpy()[0], 'noisy':deepfnf_out.noisy_ambient_scaled.numpy()[0], 'ambient':deepfnf_out.ambient_scaled.numpy()[0], 'denoised_gllf':val_output.model_output.output}
             lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_gllf':'DeepFnF+GLLF'}
+
+            if(hasattr(model, 'visualize')):
+                model_visualization = model.visualize(model_inputs)
+                for model_viz in model_visualization:
+                    images.update({model_viz.key:model_viz.image})
+                    lbls.update({model_viz.key:model_viz.label})
+
             if(double_network):
                 images.update({'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0]})
                 lbls.update({'denoised_deepfnf':'DeepFnF'})
@@ -494,10 +465,12 @@ with tf.device('/gpu:0'):
             #     lbls.update({'llf_input':'I_i'})
 
             if('filename' in example.keys()):
-                logger.addImage(images, lbls,'train',cols=5, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
+                logger.addImage(images, lbls,'train',cols=4, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
     
-        if((niter == 0 or niter % opts.visualize_freq == 0 )and opts.no_visualize is False):
+        if((niter == 0 or niter % opts.visualize_freq == 0 ) and opts.no_visualize is False):
+            tf.config.run_functions_eagerly(True)
             visualize()
+            tf.config.run_functions_eagerly(False)
         
         if niter % VALFREQ == 0:
             additional_loss, _ = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example, validation=True, double_network=double_network)
@@ -519,7 +492,6 @@ with tf.device('/gpu:0'):
         net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
         if(niter > MAXITER):
             break
-        niter += 1
         if(opts.overfit):
             # model.weights['alpha_weight'] = model.weights['alpha_weight'] * 0
             #if example does not exist, save it, otherwise load it
@@ -530,13 +502,13 @@ with tf.device('/gpu:0'):
             overfit_example_noisy_data_fn = './overfit_example_data_noisy%s.pkl' % suffix
             if(os.path.exists(overfit_example_gt_data_fn) and os.path.exists(overfit_example_noisy_data_fn)):
                 print('loaded example from file')
-                data_gt = logger.load_pickle(overfit_example_gt_data_fn)
-                data_noisy = logger.load_pickle(overfit_example_noisy_data_fn)
+                data_gt = Viz.load_pickle(overfit_example_gt_data_fn)
+                data_noisy = Viz.load_pickle(overfit_example_noisy_data_fn)
                 net_input = data_noisy['net_input']
                 alpha = data_noisy['alpha']
                 noisy_flash = data_noisy['noisy_flash']
                 noisy_ambient = data_noisy['noisy_ambient']
-                niter = data_noisy['niter']
+                # niter = data_noisy['niter']
             else:
                 print('could not load example from file')
                 denoise = None
@@ -550,8 +522,8 @@ with tf.device('/gpu:0'):
             data.update(data_gt)
             net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data)
             for _ in range(int(MAXITER)):
-                niter += 1
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data, logger.opts.double_network)
+                niter += 1
         else:
             # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
             training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data, logger.opts.double_network)

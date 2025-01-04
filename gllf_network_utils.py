@@ -21,10 +21,11 @@ def CreateNetwork(opts):
     params = {}
     params_list = get_init_params(module.Net)
     for p in params_list:
-        if(p.name == 'kargs'):
+        if(p.name == 'kargs' or p.name == 'kwargs'):
             continue
+
         if(p.name not in opts):
-            if(p.default):
+            if(p.default != p.empty):
                 params[p.name] = p.default
             else:
                 print('Could not find ',p.name, ' in CLI parametes')
