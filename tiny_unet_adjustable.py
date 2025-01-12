@@ -50,8 +50,15 @@ class Net(tiny_unet):
         if(self.downsample_ct <= 0):
             out = self.up_block(out, self.channel_count(64 ), skips.d1, pfx + 'up5')
 
-        out = self.conv(pfx + 'end_1', out, self.channel_count_end(64))
-        out = self.conv(pfx + 'end_2', out, self.channel_count_end(64), activation_name=pfx + 'end')
+        i=0
+        for i in range(int(np.log2(self.channel_count(64 )) - np.ceil(np.log2(3)))):
+            out = self.conv(pfx + 'end_%i'%(i), out, self.channel_count_end(64)//(2**i))
+
+        out = self.conv(pfx + 'end_%i'%(i+1), out, self.output_dim_size)
+        out = self.conv(pfx + 'end_%i'%(i+2), out, self.output_dim_size, activation_name=pfx + 'end')
+
+        # out = self.conv(pfx + 'end_1', out, self.channel_count_end(64))
+        # out = self.conv(pfx + 'end_2', out, self.channel_count_end(64), activation_name=pfx + 'end')
 
         return out
 

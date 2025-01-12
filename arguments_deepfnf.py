@@ -55,6 +55,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--llf_remap_function', type=str, default='exp_1d', choices=['exp_1d','exp_2d','gaussian_1d','piecewise_linear','manual'], help='size of kernel')
     parser.add_argument('--unet_output_size', type=int, default=3, help='size of kernel')
     parser.add_argument('--downsample_ct', type=int, default=0, help='size of kernel')
+    parser.add_argument('--channels_count_factors', type=float, default=1, help='size of kernel')
     parser.add_argument('--basis_ct', type=int, default=1, help='size of kernel')
     parser.add_argument('--rbf_weights_ct', type=int, default=8, help='size of kernel')
     parser.add_argument('--deepfnf_upscaling', type=str_to_bool, default=False, help='size of kernel')

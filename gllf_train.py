@@ -37,7 +37,7 @@ from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as edict
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 # num_cores = tf.config.experimental.get_cpu_device_count()
 # tf.config.threading.set_intra_op_parallelism_threads(num_cores)
@@ -516,17 +516,18 @@ with tf.device('/gpu:0'):
                     denoise = tf.stop_gradient(deepfnf_model.forward(net_input))
                 data_noisy = {'net_input':net_input, 'alpha':alpha, 'noisy_flash':noisy_flash, 'noisy_ambient':noisy_ambient, 'niter':niter, 'denoise':denoise}
                 data_gt = data
-                logger.dump_pickle(overfit_example_gt_data_fn, data)
-                logger.dump_pickle(overfit_example_noisy_data_fn, data_noisy)
+                Viz.dump_pickle(overfit_example_gt_data_fn, data)
+                Viz.dump_pickle(overfit_example_noisy_data_fn, data_noisy)
             data.update(data_noisy)
             data.update(data_gt)
-            net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data)
+            net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
             for _ in range(int(MAXITER)):
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data, logger.opts.double_network)
                 niter += 1
         else:
             # gradient_validation(net_input, alpha, noisy_flash, noisy_ambient)
             training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data, logger.opts.double_network)
+            niter += 1
 
             
 store = {}

@@ -177,13 +177,19 @@ class Net(gllf_layer_radial):
         if(inp_is_edict):
             output=edict()
             if(visualize):
-                visualization = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
-                for i in range(len(visualization)):
-                    visualization[i].image = tfu.gamma_correct(visualization[i].image)
-                return visualization
+                if('bpn_ambient' in self.input_images and 'bpn_flash' in self.input_images and len(self.input_images) == 2):
+                    return {}
+                else:
+                    visualization = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
+                    for i in range(len(visualization)):
+                        visualization[i].image = tfu.gamma_correct(visualization[i].image)
+                    return visualization
             else:
-                output.output = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
-                output.output = tfu.gamma_correct(output.output)
+                if('bpn_ambient' in self.input_images and 'bpn_flash' in self.input_images and len(self.input_images) == 2):
+                    output.output = tfu.gamma_correct(filtered_ambient_scaled + filtered_flash_scaled)
+                else:
+                    output.output = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
+                    output.output = tfu.gamma_correct(output.output)
                 return output
         else:
             return filtered_ambient + filtered_flash
