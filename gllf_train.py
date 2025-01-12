@@ -468,9 +468,12 @@ with tf.device('/gpu:0'):
                 logger.addImage(images, lbls,'train',cols=4, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
     
         if((niter == 0 or niter % opts.visualize_freq == 0 ) and opts.no_visualize is False):
-            tf.config.run_functions_eagerly(True)
+            eagerly_state = tf.config.functions_run_eagerly()
+            if(not eagerly_state):
+                tf.config.run_functions_eagerly(True)
             visualize()
-            tf.config.run_functions_eagerly(False)
+            if(not eagerly_state):
+                tf.config.run_functions_eagerly(False)
         
         if niter % VALFREQ == 0:
             additional_loss, _ = predict_losses(net_input, alpha, noisy_flash, noisy_ambient, example, validation=True, double_network=double_network)

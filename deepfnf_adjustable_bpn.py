@@ -140,7 +140,7 @@ class Net(tiny_unet):
         # smoothed_ambient = tfu.apply_dilated_filtering(
         #     smoothed_ambient, self.kernels[..., 1], dilation=4)
         # filtered_ambient = filtered_ambient + smoothed_ambient
-        denoised = filtered_ambient * self.scale
+        denoised = filtered_ambient #* self.scale
         if(inp_is_edict):
             output=edict()
             output.output = denoised
