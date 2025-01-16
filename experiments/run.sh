@@ -1,6 +1,10 @@
 #!/bin/bash
 . "/miniconda3/etc/profile.d/conda.sh"
 conda activate deepfnf
+export WANDB_CACHE_DIR=/tmp/
+export WANDB_CONFIG_DIR=/tmp/
+export WANDB_ARTIFACT_DIR=/WANDB_ARTIFACT_DIR/
+export WANDB_ARTIFACT_LOCATION=/tmp/
 wandb artifact cache cleanup 1GB
 sh_params=$@
 echo executing run.sh with arguments: $sh_params
