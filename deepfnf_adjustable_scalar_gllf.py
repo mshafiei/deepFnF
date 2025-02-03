@@ -108,6 +108,15 @@ class Net(gllf_layer_radial):
     def visualize(self, inp):
         return self.forward(inp, visualize=True)
 
+    def forward_deepfnf(inp, visualize=False):
+        pass
+
+    def forward_bpn(inp, visualize=False):
+        pass
+    
+    def forward_unet(inp, visualize=False):
+        pass
+
     @tf.function
     def forward(self, inp, visualize=False):
         inp_is_edict = type(inp) == edict
@@ -119,10 +128,6 @@ class Net(gllf_layer_radial):
             adapt_matrix = inp.adapt_matrix
             inp = inp.net_ft_input
             
-        # ambient_max = tf.reduce_max(inp[...,:3])
-        # flash_max = tf.reduce_max(inp[...,3:6])
-        # scale_ratio = flash_max/ambient_max
-        # scale_ratio = 1/0.0848
         self.imsp = tf.shape(inp)
         lowres_input = self.downsample(inp)
         self.predict_coeff(lowres_input)
@@ -154,12 +159,6 @@ class Net(gllf_layer_radial):
             bpn_out=tfu.gamma_correct(filtered_ambient_scaled + filtered_flash_scaled)
             return edict(output=bpn_out)
 
-        ambient_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
-        flash_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, 3:6], color_matrix, adapt_matrix, do_gamma_correct=False)
-        
-        # source_images = [filtered_ambient_scaled, filtered_flash_scaled, ambient_scaled, flash_scaled]
         source_images = []
         if('bpn_ambient' in self.input_images):
             source_images.append(filtered_ambient_scaled)
@@ -168,9 +167,13 @@ class Net(gllf_layer_radial):
             source_images.append(filtered_flash_scaled)
         
         if('noisy_ambient' in self.input_images):
+            ambient_scaled = tfu.camera_to_rgb(
+            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
             source_images.append(ambient_scaled)
         
         if('noisy_flash' in self.input_images):
+            flash_scaled = tfu.camera_to_rgb(
+            inp[:, :, :, 3:6], color_matrix, adapt_matrix, do_gamma_correct=False)
             source_images.append(flash_scaled)
 
 

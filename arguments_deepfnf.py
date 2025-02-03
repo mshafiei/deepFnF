@@ -52,6 +52,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--llf_sigma', type=float, default=1.0, help='size of kernel')
     parser.add_argument('--llf_levels', type=int, default=2, help='size of kernel')
     parser.add_argument('--llf_intensity_levels', type=int, default=4, help='size of kernel')
+    parser.add_argument('--use_halide_implementation', type=str_to_bool, default=False, help='size of kernel')
     parser.add_argument('--llf_remap_function', type=str, default='exp_1d', choices=['exp_1d','exp_2d','gaussian_1d','piecewise_linear','manual'], help='size of kernel')
     parser.add_argument('--unet_output_size', type=int, default=3, help='size of kernel')
     parser.add_argument('--downsample_ct', type=int, default=0, help='size of kernel')

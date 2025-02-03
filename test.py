@@ -107,6 +107,26 @@ def test_idx(datapath,data,k,c,logger,model):
         model_output.denoise, model_output.alpha_map = model_output.output, model_output.llf_alpha_h[0]
         model_output.deepfnf_scaled = inputs.deepfnf_scaled
         gllf_guide = model_output.llf_guide
+    elif(logger.opts.model == "deepfnf_adjustable_scalar_gllf"):
+        # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
+        net_ft_input = net_input
+        inputs = edict()
+        inputs.net_ft_input = net_ft_input
+        inputs.color_matrix = data['color_matrix']
+        inputs.adapt_matrix = data['adapt_matrix']
+        inputs.alpha = data['alpha']
+        model_output = edict(model.forward(inputs))
+        visualize = model.visualize(inputs)
+        ims = {}
+        lbls = {}
+        for v in visualize:
+            ims.update({v.key:v.image})
+            lbls.update({v.key:v.label})
+        ims.update({'output':model_output.output})
+        lbls.update({'output':'model_output'})
+        # model_output.deepfnf_scaled = inputs.deepfnf_scaled
+        # gllf_guide = model_output.llf_guide
+        logger.addImage(ims, lbls, 'fnf')
     else:
         import timeit
         timing_iterations = 3
@@ -434,7 +454,8 @@ def test(model, model_path, datapath,logger):
                     #concatenate
                 else:
                     with tf.device('/gpu:0'):
-                        test_idx(datapath,data,k,c,logger,model)
+                        k,c, logger, model_output, datapath, running_time, model = test_idx(datapath,data,k,c,logger,model)
+                        
                         # test_idx(datapath,data,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
                         logger.dumpDictJson(metrics_list,'test_errors_samples','test')
                         logger.dumpDictJson(errors_dict,'test_errors','test')

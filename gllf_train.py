@@ -4,48 +4,23 @@ parser = parse_arguments_deepfnf()
 opts = parser.parse_args()
 import tensorflow as tf
 import os
-import argparse
 import timeit
-import utils.np_utils as npu
 import numpy as np
 from test import test
-# import net_ksz3
-import deepfnf
-import net_cheap as netCheap
-# from net_laplacian_combine import Net as netLaplacianCombine
-# from net_no_change import NetNoChange as netNoChange
-from net_fft_combine import Net as netFFTCombine
-from net_flash_image import Net as netFlash
-from net_fft import Net as netFFT
-# from net_laplacian_combine_pixelwise import Net as netLaplacianCombinePixelWise
-from net_no_scalemap import Net as NetNoScaleMap
-from net_grad import Net as NetGrad
-# from net_slim import Net as NetSlim
 import gllf_network_utils as net_utils
 from gllf.gllf_utils import prepare_input
-import utils.utils as ut
 import utils.tf_utils as tfu
 from utils.dataset_prefetch import TrainSet as TrainSet_prefetch
 from utils.dataset_prefetch_nthreads import TrainSet as TrainSet_prefetch_nthread
 from utils.dataset import Dataset
 from utils.dataset_filelock import TrainSet as Trainset_filelock
 import cvgutils.Viz as Viz
-import time
-from tensorflow.python.profiler import profiler_v2 as profiler
 import keras
 from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as edict
 # tf.config.run_functions_eagerly(True)
-
-# num_cores = tf.config.experimental.get_cpu_device_count()
-# tf.config.threading.set_intra_op_parallelism_threads(num_cores)
-# tf.config.threading.set_inter_op_parallelism_threads(1)
-# os.environ["OMP_NUM_THREADS"] = "1"
-# os.environ["KMP_BLOCKTIME"] = "1"
-# os.environ["KMP_SETTINGS"] = "1"
-# os.environ["KMP_AFFINITY"] = "granularity=fine,verbose,compact,1,0"
 
 image_size=448
 local_ckpt_dir = '/home/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weights/keras'
