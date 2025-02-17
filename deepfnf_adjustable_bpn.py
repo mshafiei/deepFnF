@@ -9,8 +9,8 @@ from tiny_unet_adjustable import Net as tiny_unet
 from easydict import EasyDict as edict
 
 class Net(tiny_unet):
-    def __init__(self, downsample_ct=0, unet_output_size=6, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1):
-        super().__init__(unet_output_size=unet_output_size, channels_count_factor=channels_count_factor)
+    def __init__(self, downsample_ct=0, unet_output_size=6, num_basis=90, ksz=15, burst_length=2, channels_count_factor=1,**kwargs):
+        super().__init__(unet_output_size=unet_output_size, channels_count_factor=channels_count_factor,**kwargs)
         self.downsample_ct = downsample_ct
         self.num_basis = num_basis
         self.ksz = ksz
