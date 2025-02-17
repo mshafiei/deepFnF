@@ -50,7 +50,7 @@ for i, (downsample, channels_count_factor) in enumerate(zip(downsample_ct, chann
 
     # llf_levels, llf_intensity_levels, llf_remap_function, rbf_weights_ct, yuv_gllf, alphas, betas, sigmas, thresholds, downsample_ct, use_halide_implementation=False, img_ct=None, gaussian_weights_scale=2,gaussian_sigma_offset=3, piecewise_linear_weight_max=3, piecewise_linear_sigma=0.2, basis_ct=1,unet_output_size=6, min_intensity=0.0, max_intensity=1.0, IMSZ=448
     # downsample_ct=0, unet_output_size=3, channels_count_factor=1
-    unet_gllf = tiny_unet_alpha_gllf.Net(downsample_ct=downsample, channels_count_factor=channels_count_factor, input_images=["noisy_ambient","noisy_flash", "deep_denoised"], llf_levels=4, llf_intensity_levels=4, llf_remap_function="gaussian_1d", rbf_weights_ct=1, yuv_gllf="false", alphas=1.0, betas=1.0, sigmas=1.0, thresholds=None, use_halide_implementation=True)
+    unet_gllf = tiny_unet_alpha_gllf.Net(downsample_ct=downsample, channels_count_factor=channels_count_factor, input_images=["noisy_ambient","noisy_flash", "deep_denoised"], llf_levels=4, llf_intensity_levels=4, llf_remap_function="gaussian_1d", rbf_weights_ct=8, yuv_gllf="false", alphas=1.0, betas=1.0, sigmas=1.0, thresholds=None, use_halide_implementation=True)
     unet = tiny_unet_adjustable_fnf.Net(downsample, unet_output_size=3, channels_count_factor=channels_count_factor)
     deepfnf = deepfnf_adjustable.Net(downsample_ct=downsample, unet_output_size=3, num_basis=90, ksz=15, burst_length=2, channels_count_factor=channels_count_factor)
     bpn = deepfnf_adjustable_bpn.Net(downsample_ct=downsample, unet_output_size=3, num_basis=90, ksz=15, burst_length=2, channels_count_factor=channels_count_factor)

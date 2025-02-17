@@ -3,7 +3,7 @@ from gllf.gllf_utils import *
 import tensorflow.experimental.numpy as tnp
 from tiny_unet_adjustable import Net as tiny_unet
 import utils.tf_utils as tfu
-import Viz as viz
+import cvgutils.Viz as viz
 from easydict import EasyDict as edict
 #encode: a vector per intensity layer
 # each vector represents an odd basis function
