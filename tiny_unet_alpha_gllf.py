@@ -8,36 +8,69 @@ class Net(gllf_layer_radial):
         super().__init__(downsample_ct=downsample_ct, unet_output_size=unet_output_size, channels_count_factor=channels_count_factor,**kwargs)
         self.input_images = input_images
         self.img_ct = len(self.input_images)
+        if('noisy_ambient' in self.input_images and (not ('noisy_flash' in self.input_images)) and (not ('deep_denoised' in self.input_images))):
+            self.sources_mode = 1
+        elif('noisy_ambient' in self.input_images and 'noisy_flash' in self.input_images and not('deep_denoised' in self.input_images)):
+            self.sources_mode = 2
+        elif('noisy_ambient' in self.input_images and 'noisy_flash' in self.input_images and 'deep_denoised' in self.input_images):
+            self.sources_mode = 3
+        else:
+            print('Could not interprete the input images')
+            exit(0)
 
     def visualize(self, inpt):
         return self.forward(inpt, visualize=True)
 
+    @tf.function
     def forward(self, inp, visualize=False):
         alpha = inp.alpha
         color_matrix = inp.color_matrix
         adapt_matrix = inp.adapt_matrix
         inp = inp.net_ft_input
-        self.resize_encode(inp)
+        
+        if(self.sources_mode == 3):
+            _, h, w, _ = inp.shape
+            out, skips = self.resize_encode(inp)
+            direct_denoised = self.resize_decode(out, skips, h, w)
+            # direct_denoised, image_weights = self.resize_joint_decode(out, skips, h, w)
+            image_weights = self.decode_per_layer(out, skips, self.max_levels, "decode_per_layer_")
+            self.image_weights = [image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1]
+        else:
+            self.resize_encode(inp)
+        
+        #double head neural network
+        #one head predicts denoised image
+        #another had predicts image
+
+        #Pass the bottleneck to a few convolution layers
+        #Upsample the output
+        #Pass to GLLF
 
         ambient_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix, do_gamma_correct=True)
+            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
         flash_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, 3:6], color_matrix, adapt_matrix, do_gamma_correct=True)
+            inp[:, :, :, 3:6], color_matrix, adapt_matrix, do_gamma_correct=False)
         
         source_images = []
-        if('noisy_ambient' in self.input_images):
+        if(self.sources_mode >=1):
             source_images.append(ambient_scaled)
         
-        if('noisy_flash' in self.input_images):
+        if(self.sources_mode >=2):
             source_images.append(flash_scaled)
+
+        if(self.sources_mode >=3):
+            direct_denoised = tfu.camera_to_rgb(
+                direct_denoised / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
+            source_images.append(direct_denoised)
+
 
         if(visualize):
             visualization = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
-            # for i in range(len(visualization)):
-            #     visualization[i].image = tfu.gamma_correct(visualization[i].image)
+            for i in range(len(visualization)):
+                visualization[i].image = tfu.gamma_correct(visualization[i].image)
             return visualization
         else:
             output=edict()
             output.output = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
-            # output.output = tfu.gamma_correct(output.output)
+            output.output = tfu.gamma_correct(output.output)
             return output

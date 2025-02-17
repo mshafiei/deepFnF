@@ -120,6 +120,7 @@ class Net(tiny_unet):
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
 
+    @tf.function
     def forward(self, inp):
         inp_is_edict = type(inp) == edict
         if(inp_is_edict):

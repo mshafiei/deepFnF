@@ -8,6 +8,21 @@ from easydict import EasyDict as edict
 #encode: a vector per intensity layer
 # each vector represents an odd basis function
 
+@tf.numpy_function(Tout=tf.float32)
+def gllf_diffable_1d_halide(im_is, IMSZ, range_weights, w_i, sigma_i, img_ct, max_levels, image_weights_0, image_weights_1, image_weights_2, image_weights_3):
+    from guided_local_laplacian_color_neural_local_alpha_Mullapudi2016 import guided_local_laplacian_color_neural_local_alpha_Mullapudi2016 as guided_local_laplacian_color
+    llf_out = np.empty([3, IMSZ, IMSZ], dtype=np.float32)
+    _, s_h, s_w, _, _ = image_weights_0.shape
+    input_contiguous = np.ascontiguousarray(im_is[0].transpose(3,2,1,0))
+    guided_local_laplacian_color(input_contiguous, max_levels, 
+                        np.ascontiguousarray(image_weights_0.transpose(4,3,2,1,0)), 
+                        np.ascontiguousarray(image_weights_1.transpose(4,3,2,1,0)), 
+                        np.ascontiguousarray(image_weights_2.transpose(4,3,2,1,0)),
+                        np.ascontiguousarray(image_weights_3.transpose(4,3,2,1,0)), 
+                        np.ascontiguousarray(range_weights.transpose(2,1,0)),
+                        np.ascontiguousarray(w_i.transpose(1,0)), 
+                        np.ascontiguousarray(sigma_i.transpose(1,0)), img_ct, s_w, s_h, IMSZ, IMSZ, llf_out)
+    return llf_out.transpose(2,1,0)[None,...]
 class gllf_layer_radial(tiny_unet):
     def __init__(self, llf_levels, llf_intensity_levels, llf_remap_function, rbf_weights_ct, yuv_gllf, alphas, betas, sigmas, thresholds, downsample_ct, use_halide_implementation=False, img_ct=None, gaussian_weights_scale=2,gaussian_sigma_offset=3, piecewise_linear_weight_max=3, piecewise_linear_sigma=0.2, basis_ct=1,unet_output_size=6, min_intensity=0.0, max_intensity=1.0, IMSZ=448,**kwargs):
         super().__init__(downsample_ct, unet_output_size=unet_output_size,**kwargs)
@@ -62,7 +77,7 @@ class gllf_layer_radial(tiny_unet):
                 for i in range(len(visualization)):
                     if('remapping' in visualization[i].key):
                         continue
-                    visualization[i].image = tf.abs(visualization[i].image)
+                    visualization[i].image = visualization[i].image
                 return visualization
         else:
             # im = 0
@@ -70,7 +85,8 @@ class gllf_layer_radial(tiny_unet):
             #     im += i
             # return im
             if(self.use_halide_implementation):
-                output = self.gllf_diffable_1d_halide(imgs)
+                output = gllf_diffable_1d_halide(tf.stack(imgs,axis=-1), self.IMSZ, self.range_weights, self.w_i, self.sigma_i, self.img_ct, self.max_levels, self.image_weights[0], self.image_weights[1], self.image_weights[2], self.image_weights[3])
+                # return imgs[-1]
             else:
                 output = self.gllf_diffable_1d(imgs)
             if(self.yuv_gllf):
@@ -84,7 +100,7 @@ class gllf_layer_radial(tiny_unet):
         return alpha * fx * tf.exp(-fx * fx / 2.0)
 
     def scalar_alphas_net(self, bottleneck):
-        pfx='scalars'
+        pfx='scalars_'
         
         #Nx4x4ximage_count
         if(self.llf_remap_function == 'exp_1d'):
@@ -97,27 +113,50 @@ class gllf_layer_radial(tiny_unet):
             # out_scalars = self.conv(pfx + 'alpha_bottleneck_5', out_scalars, self.channel_count(8),relu=False, ksz=1)
             # out_scalars = self.conv(pfx + 'alpha_bottleneck_6', out_scalars, self.channel_count(4),relu=False, ksz=1)# 1, 4, 4, 1
             # out_scalars = self.conv(pfx + 'alpha_bottleneck_7', out_scalars, 1,relu=False, activation_name=pfx + 'bottleneck', ksz=1) #1x4x4x1
-            self.scalar_alphas = tf.reshape(out_scalars*2-1,(1,2, self.max_discrete_levels, 4)) * 0 #16 basis functions
-            # self.alphas = self.scalar_alphas[0,:,:,0]
-            self.alphas = [[self.scalar_alphas[0,0,0,0], self.scalar_alphas[0,0,0,0], self.scalar_alphas[0,0,0,0], self.scalar_alphas[0,0,0,0]]]
+            self.scalar_alphas = tf.reshape(out_scalars * 2 - 1,(1,2, self.max_discrete_levels, 4)) #16 basis functions
+            self.alphas = self.scalar_alphas[0,:,:,0]
+            # self.alphas = [[self.scalar_alphas[0,0,0,0], self.scalar_alphas[0,0,0,0], self.scalar_alphas[0,0,0,0], self.scalar_alphas[0,0,0,0]]]
+            self.alphas = []
             self.betas = []
             self.sigmas = []
             for j in range(self.img_ct):
                 betas_j = []
                 sigmas_j = []
+                alphas_j = []
                 for i in range(self.max_discrete_levels):
+                    alphas_j.append(self.scalar_alphas[0,j,i,0])
+                    sigmas_j.append(1.)
                     if(j == 0):
                         betas_j.append(1.)
-                        sigmas_j.append(1.)
                     else:
                         betas_j.append(self.scalar_alphas[0,j,i,1])
-                        sigmas_j.append(self.scalar_alphas[0,j,i,2])
+                        # sigmas_j.append(self.scalar_alphas[0,j,i,2])
+                self.alphas.append(alphas_j)
                 self.betas.append(betas_j)
                 self.sigmas.append(sigmas_j)
             #alphas, betas, sigmas are img_ct, discrete_intensities
             # self.alphas = [self.scalar_alphas_options[0] * self.scalar_alphas[0,0], self.scalar_alphas_options[1] * self.scalar_alphas[0,1], self.scalar_alphas_options[2] * self.scalar_alphas[0,2],  self.scalar_alphas_options[3] * self.scalar_alphas[0,3]]
             # self.betas =  [1,                                                       self.scalar_betas_options[1]  * self.scalar_alphas[0,5], self.scalar_betas_options[2]  * self.scalar_alphas[0,6],  self.scalar_betas_options[3]  * self.scalar_alphas[0,7]]
             # self.sigmas = [1,                                                       self.scalar_sigmas_options[1] * self.scalar_alphas[0,9], self.scalar_sigmas_options[2] * self.scalar_alphas[0,10], self.scalar_sigmas_options[3] * self.scalar_alphas[0,11]]
+            self.range_weights      = tf.ones((1,self.img_ct, self.max_discrete_levels))
+            # self.image_weights      = tf.ones((self.max_levels))
+            self.image_weights = []
+            for i in range(self.max_levels):
+                spatial_weights = bottleneck
+                for j in range(i):
+                    spatial_weights, _  = self.down_block(spatial_weights,  self.channel_count(1024), pfx + 'image_basis_down%i_%i' % (i,j))
+                #convolve, store and downsample
+                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_1' % i, spatial_weights, self.channel_count(512//(2**i)), relu=False, ksz=1)
+                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_2' % i, image_weights, self.channel_count(512//(2**(i+1))), relu=False, ksz=1)
+                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_3' % i, image_weights, self.channel_count(512//(2**(i+2))), relu=False, ksz=1)
+                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_4' % i, image_weights, self.img_ct * 3, relu=False, ksz=1)
+                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_5' % i, image_weights, self.img_ct * 3, relu=False, ksz=1)
+                image_weights    = tf.reshape(image_weights,(*image_weights.shape[:3], self.img_ct, 3))+0.5
+                self.image_weights.append(image_weights)
+        elif(self.llf_remap_function == 'manual_1d'):
+            self.alphas = [[-1, -1, -1, -1]]
+            self.betas = [[1.,1.,1.,1.]]
+            self.sigmas = [[1.,1.,1.,1.]]
             self.range_weights      = tf.ones((1,self.img_ct, self.max_discrete_levels))
             self.image_weights      = tf.ones((self.max_levels))
         elif(self.llf_remap_function == 'exp_2d'):
@@ -151,7 +190,7 @@ class gllf_layer_radial(tiny_unet):
             #b,2,I,K
             basis_weights           = tf.reshape(basis_weights, (1, 2, self.img_ct, self.max_discrete_levels * self.basis_ct * self.rbf_weights_ct))
             #I,K
-            self.w_i                = 2 * tf.nn.sigmoid(basis_weights[0,0,:,:self.max_discrete_levels]) - 1 * self.gaussian_weights_scale
+            self.w_i                = (2 * tf.nn.sigmoid(basis_weights[0,0,:,:self.max_discrete_levels]) - 1) * self.gaussian_weights_scale
             #I,K
             self.sigma_i            = basis_weights[0,1,:,:self.max_discrete_levels] ** 2 + self.gaussian_sigma_offset
 
@@ -159,44 +198,18 @@ class gllf_layer_radial(tiny_unet):
             #interpolates different ranges
             range_weights           = range_basis_weights[:,basis_weights_size:]
             self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
-
-            # #encode spatial image weights
-            # #spatial weight:
-            # spatial_channel_ct = self.max_levels * self.img_ct * 3
-            # # spatial_weights, _ = self.down_block(bottleneck,  self.channel_count(512), pfx + 'spatial_down5')#1,8,8,64
-            # # spatial_weights, _ = self.down_block(spatial_weights, self.channel_count(256), pfx + 'spatial_down6') #1,4,4,32
-            # # spatial_weights, _ = self.down_block(spatial_weights, self.channel_count(128), pfx + 'spatial_down7') #1,2,2,16
-            # spatial_weights    = self.conv(pfx + 'spatial_bottleneck_1', bottleneck, self.channel_count(512), relu=False, ksz=1) #1,2,2,16
-            # spatial_weights    = self.conv(pfx + 'spatial_bottleneck_2', spatial_weights, self.channel_count(256), relu=False, ksz=1) #1,2,2,16
-            # spatial_weights    = self.conv(pfx + 'spatial_bottleneck_3', spatial_weights, self.channel_count(128), relu=False, ksz=1) #1,2,2,16
-            # spatial_weights    = self.conv(pfx + 'spatial_bottleneck_4', spatial_weights, spatial_channel_ct, relu=False, ksz=1) #1,2,2,16
-            # spatial_weights    = self.conv(pfx + 'spatial_bottleneck_5', spatial_weights, spatial_channel_ct, relu=False, ksz=1) #1,2,2,16
             
-            # #spatial image weight: {I},{L},s_h,s_w
-            # #interpolates the laplacian pyramids of different images locally
-            # self.image_weights      = tf.reshape(spatial_weights,(*spatial_weights.shape[:3], self.img_ct, 3, self.max_levels))
-            # self.image_weights = tf.transpose(self.image_weights, (5,0,1,2,3,4))
-
-            # #encode spatial image weights
-            spatial_weights = bottleneck
-            # #spatial image weight: {I},{L},s_h,s_w
-            # #interpolates the laplacian pyramids of different images locally
-            self.image_weights = []
-            for i in range(self.max_levels):
-                #convolve, store and downsample
-                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_1' % i, spatial_weights, self.channel_count(512//(2**i)), relu=False, ksz=1)
-                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_2' % i, image_weights, self.channel_count(512//(2**(i+1))), relu=False, ksz=1)
-                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_3' % i, image_weights, self.channel_count(512//(2**(i+2))), relu=False, ksz=1)
-                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_4' % i, image_weights, self.img_ct * 3, relu=False, ksz=1)
-                image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_5' % i, image_weights, self.img_ct * 3, relu=False, ksz=1)
-                image_weights    = tf.reshape(image_weights,(*image_weights.shape[:3], self.img_ct, 3))
-                self.image_weights.append(image_weights)
-                if(i != self.max_levels - 1):
-                    spatial_weights, _  = self.down_block(spatial_weights,  self.channel_count(512//(2**i)), pfx + 'image_basis_down%i' % i)
+            #create a small unet here
+            #if downsample = 0 the unet is just a decoder
+            #self.skip_gllf.d1 = self.skip.d1 ...
+            #if downsample = 3 the unet is an encoder and a decoder
+                #self.encode
+                #self.decode
+                #
+            #decode gllf local interpolation
+            # for i in range(self.downsample_ct):
             
             # 128
-            #
-            #
             # self.image_weights = []
             # for i in range(self.max_levels):
             #     spatial_weights = bottleneck
@@ -208,33 +221,9 @@ class gllf_layer_radial(tiny_unet):
             #     image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_3' % i, image_weights, self.channel_count(512//(2**(i+2))), relu=False, ksz=1)
             #     image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_4' % i, image_weights, self.img_ct * 3, relu=False, ksz=1)
             #     image_weights    = self.conv(pfx + 'spatial_bottleneck_%i_5' % i, image_weights, self.img_ct * 3, relu=False, ksz=1)
-            #     image_weights    = tf.reshape(image_weights,(*image_weights.shape[:3], self.img_ct, 3))
+            #     image_weights    = tf.reshape(image_weights,(*image_weights.shape[:3], self.img_ct, 3))+0.5
             #     self.image_weights.append(image_weights)
-            
-            # for i in range(0,self.max_levels):
-            #     tmp = np.ones_like(self.image_weights[i].numpy())
-            #     self.image_weights[i] = tf.convert_to_tensor(tmp)
-            # tmp = np.zeros_like(self.image_weights[0].numpy())
-            # tmp[:,0:1,0:1,1,:] = 0.1
-            # # tmp[:,4:5,4:5,1,0] = 1
-            # self.image_weights[0] = tf.convert_to_tensor(tmp)
-            # tmp = np.zeros_like(self.image_weights[1].numpy())
-            # tmp[:,0:1,0:1,1,:] = 0.1
-            # # tmp[:,:,:,:,:] = 0
-            # # tmp[:,4:5,4:5,1,:] = self.image_weights[1].numpy()[:,4:5,4:5,1,:]
-            # self.image_weights[1] = tf.convert_to_tensor(tmp)
-            # tmp = np.zeros_like(self.image_weights[2].numpy())
-            # tmp[:,0:1,0:1,1,:] = 0.1
-            # self.image_weights[2] = tf.convert_to_tensor(tmp)
-            # tmp = np.zeros_like(self.image_weights[3].numpy())
-            # tmp[:,0:1,0:1,1,:] = 0.1
-            # self.image_weights[3] = tf.convert_to_tensor(tmp)
-            
-            # tmp = np.ones_like(self.range_weights.numpy())
-            # tmp[0,1,0] = 5 #self.range_weights.numpy()[0,1,0]
-            # self.range_weights = tf.convert_to_tensor(tmp)
-            # self.w_i = self.w_i * 0# + 1
-            # self.sigma_i = self.sigma_i * 0 #+ 1
+
             return self.w_i, self.sigma_i
         elif(self.llf_remap_function == 'manual'):
             #range weight: k * i
@@ -310,10 +299,11 @@ class gllf_layer_radial(tiny_unet):
             rates=[1, 1, 1, 1],
             padding='VALID'
         )
+        blocks = tf.reshape(blocks,(b_ct * i_ct, c, *blocks.shape[1:]))
         
 
         image_weights_interim = tf.einsum('bhwIc->bIchw',image_weights)
-        image_weights_interim = tf.reshape(image_weights_interim,(b_ct*self.img_ct*3,*image_weights_interim.shape[3:]))
+        image_weights_interim = tf.reshape(image_weights_interim,(b_ct*self.img_ct,self.per_layer_decoder_nchannels,*image_weights_interim.shape[3:]))
         interim_blocks = blocks * image_weights_interim[...,None]
         interim_blocks = tf.reshape(interim_blocks,(b_ct,i_ct,3,s_h, s_w,b_h,b_w))
         interim_blocks = tf.einsum('bIchwHW->bIhHwWc',interim_blocks)
@@ -323,23 +313,9 @@ class gllf_layer_radial(tiny_unet):
     
     def diffable_slice_separable(self, l_i, lpyramids, image_weights):
         outLPyramids = self.diffable_slice_separable_expansion(l_i, lpyramids * self.range_weights[...,None,None,None]) #1, I, h, w, c
-        if(self.llf_remap_function == 'gaussian_1d'):
+        if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
             outLPyramids = self.apply_image_weights_to_pyramid(outLPyramids, image_weights)
         return tf.reduce_sum(outLPyramids,axis=1) #1, h, w, c
-
-    def gllf_diffable_1d_halide(self, im_is, debug_reconstruct_all_remapping_images=False):
-        llf_out = np.empty([3, self.IMSZ, self.IMSZ], dtype=np.float32)
-        _, s_h, s_w, _, _ = self.image_weights[0].shape
-        input_contiguous = np.ascontiguousarray(tf.stack(im_is,axis=-1)[0].numpy().transpose(3,2,1,0))
-        self.halide_gllf(input_contiguous, self.max_levels, 
-                         np.ascontiguousarray(self.image_weights[0].numpy().transpose(4,3,2,1,0)), 
-                         np.ascontiguousarray(self.image_weights[1].numpy().transpose(4,3,2,1,0)), 
-                         np.ascontiguousarray(self.image_weights[2].numpy().transpose(4,3,2,1,0)),
-                         np.ascontiguousarray(self.image_weights[3].numpy().transpose(4,3,2,1,0)), 
-                         np.ascontiguousarray(self.range_weights.numpy().transpose(2,1,0)),
-                         np.ascontiguousarray(self.w_i.numpy().transpose(1,0)), 
-                         np.ascontiguousarray(self.sigma_i.numpy().transpose(1,0)), self.img_ct, s_w, s_h, self.IMSZ, self.IMSZ, llf_out)
-        return tf.convert_to_tensor(llf_out.transpose(2,1,0)[None,...])
     
     def gllf_diffable_1d(self, im_is, debug_reconstruct_all_remapping_images=False):
         # return self.remapping_1d(im_is, 0, 0)
@@ -365,7 +341,7 @@ class gllf_layer_radial(tiny_unet):
                 #outLPyramids pyramid_level_ct, 1, I, intensity_level_ct, h_level, w_level, c
                 #G_is         pyramid_level, 1, I, h_level, w_level, c
                 outLPyramid_slice_with_range_weight = self.diffable_slice_separable_expansion(G_is[i], outLPyramids[i] * self.range_weights[...,None,None,None])
-                if(self.llf_remap_function == 'gaussian_1d'):
+                if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
                     outLPyramid_slice_with_image_weight = self.apply_image_weights_to_pyramid(outLPyramid_slice_with_range_weight, self.image_weights[i])
                     outLPyramid_image.append(outLPyramid_slice_with_image_weight)
                 outLPyramid_range.append(outLPyramid_slice_with_range_weight)
@@ -377,12 +353,16 @@ class gllf_layer_radial(tiny_unet):
                 img_levels_image = []
                 for j in range(self.max_levels):
                     img_levels_range.append(outLPyramid_range[j][:,i])
-                    if(self.llf_remap_function == 'gaussian_1d'):
+                    if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
                         img_levels_image.append(outLPyramid_image[j][:,i])
                 intensity_images_range.append(reconstruct_Laplacian(img_levels_range, self.max_levels))
-                if(self.llf_remap_function == 'gaussian_1d'):
+                if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
                     intensity_images_image.append(reconstruct_Laplacian(img_levels_image, self.max_levels))
+            # for i in range(self.max_levels):
+            #     outLPyramid_slice = self.diffable_slice_separable(G_is[i], outLPyramids[i], self.image_weights[i]) #1, h, w, c
+            #     outLPyramid.append(outLPyramid_slice)
             return intensity_images_range, intensity_images_image
+            # return reconstruct_Laplacian(outLPyramid, self.max_levels), None
         else:
             for i in range(self.max_levels):
                 #h_0 = 448
@@ -412,7 +392,7 @@ class gllf_layer_radial(tiny_unet):
         # threshold = None if self.thresholds is None else self.thresholds[im_idx]
         level = k / (self.max_discrete_levels - 1)
         level = level * (self.max_intensity - self.min_intensity) + self.min_intensity
-        if(self.llf_remap_function == 'exp_1d'):
+        if(self.llf_remap_function == 'exp_1d' or self.llf_remap_function == 'manual_1d'):
             i, alpha, beta, sigma = im_is[im_idx], self.alphas[im_idx][k], self.betas[im_idx][k], self.sigmas[im_idx][k]
             return self.llf_remap(i, level, sigma, beta, alpha)
         elif(self.llf_remap_function == 'exp_2d'):
@@ -463,7 +443,7 @@ class gllf_layer_radial(tiny_unet):
                 # ,xlim=[-1.2,1.2],ylim=[-1.2,1.2]
                 visualizations += [edict(image=viz.plot(x, y) / 255., label='$image=%i, \gamma=%i$'% (j,i), key='remapping_%i_%i' % (i, j))]
             visualizations += [edict(image=reconstructed_images_range[j], label='$image=%i, reconstructed w range$'% (j), key='reconstructed_w_range%i' % (j))]
-            if(self.llf_remap_function == 'gaussian_1d'):
+            if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
                 visualizations += [edict(image=reconstructed_images_image[j], label='$image=%i, reconstructed w range+image$'% (j), key='reconstructed w range+image %i' % (j))]
         return visualizations
 

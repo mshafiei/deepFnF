@@ -20,7 +20,7 @@ from datetime import datetime
 from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as edict
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 image_size=448
 local_ckpt_dir = '/home/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weights/keras'
@@ -307,15 +307,15 @@ with tf.device('/gpu:0'):
         if('llf_guide' in double_deepfnf):
             double_deepfnf.llf_guide = tfu.camera_to_rgb(double_deepfnf.llf_guide,
                 example['color_matrix'], example['adapt_matrix'])
-        
-        gradients = tape.gradient(loss, model.weights.values())
-        # keys = list(model.weights.keys())
-        # vals = list(model.weights.values())
-        # for idx in range(len(vals)):
-        #     if('alpha' in keys[idx]):
-        #         gradients[idx] = alpha_coeffs
-        
-        opt.apply_gradients(zip(gradients,model.weights.values()))
+        if(opts.apply_gradient):
+            gradients = tape.gradient(loss, model.weights.values())
+            # keys = list(model.weights.keys())
+            # vals = list(model.weights.values())
+            # for idx in range(len(vals)):
+            #     if('alpha' in keys[idx]):
+            #         gradients[idx] = alpha_coeffs
+            
+            opt.apply_gradients(zip(gradients,model.weights.values()))
         psnr_metric = tfu.get_psnr(double_deepfnf.output, model_inputs.ambient_scaled)
         losses = {'loss':loss, 'l2_loss':l2_loss, 'gradient_loss':gradient_loss,
         'wlpips_loss':opts.wlpips * wlpips_loss, 'lpips_loss':opts.lpips * lpips_loss, 'psnr':psnr_metric}

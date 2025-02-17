@@ -107,7 +107,7 @@ def test_idx(datapath,data,k,c,logger,model):
         model_output.denoise, model_output.alpha_map = model_output.output, model_output.llf_alpha_h[0]
         model_output.deepfnf_scaled = inputs.deepfnf_scaled
         gllf_guide = model_output.llf_guide
-    elif(logger.opts.model == "deepfnf_adjustable_scalar_gllf"):
+    elif(logger.opts.model == "deepfnf_adjustable_scalar_gllf" or logger.opts.model == "tiny_unet_alpha_gllf"):
         # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
         net_ft_input = net_input
         inputs = edict()

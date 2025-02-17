@@ -90,7 +90,8 @@ class Net:
         '''
         out = tf.image.resize(out, 2 * tf.shape(out)[1:3])
         out = self.conv(pfx + '_1', out, nch, ksz=3, stride=1)
-
+        if(skip.shape[1] != out.shape[1]):
+            out = tf.image.resize(out, tf.shape(skip)[1:3])
         out = tf.concat([out, skip], axis=-1)
 
         out = self.conv(pfx + '_2', out, nch, ksz=3, stride=1)
