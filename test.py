@@ -116,17 +116,23 @@ def test_idx(datapath,data,k,c,logger,model):
         inputs.adapt_matrix = data['adapt_matrix']
         inputs.alpha = data['alpha']
         model_output = edict(model.forward(inputs))
-        visualize = model.visualize(inputs)
-        ims = {}
-        lbls = {}
-        for v in visualize:
-            ims.update({v.key:v.image})
-            lbls.update({v.key:v.label})
-        ims.update({'output':model_output.output})
-        lbls.update({'output':'model_output'})
-        # model_output.deepfnf_scaled = inputs.deepfnf_scaled
-        # gllf_guide = model_output.llf_guide
-        logger.addImage(ims, lbls, 'fnf')
+        eagerly_state = tf.config.functions_run_eagerly()
+        if(c % logger.opts.visualize_freq == 0):
+            if(not eagerly_state):
+                tf.config.run_functions_eagerly(True)
+            visualize = model.visualize(inputs)
+            if(not eagerly_state):
+                tf.config.run_functions_eagerly(False)
+            ims = {}
+            lbls = {}
+            for v in visualize:
+                ims.update({v.key:v.image})
+                lbls.update({v.key:v.label})
+            ims.update({'output':model_output.output})
+            lbls.update({'output':'model_output'})
+            # model_output.deepfnf_scaled = inputs.deepfnf_scaled
+            # gllf_guide = model_output.llf_guide
+            logger.addImage(ims, lbls, 'fnf')
     else:
         import timeit
         timing_iterations = 3
