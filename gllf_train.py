@@ -403,10 +403,7 @@ with tf.device('/gpu:0'):
             lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_gllf':'DeepFnF+GLLF'}
 
             if(hasattr(model, 'visualize')):
-                model_visualization = model.visualize(model_inputs)
-                for model_viz in model_visualization:
-                    images.update({model_viz.key:model_viz.image})
-                    lbls.update({model_viz.key:model_viz.label})
+                images, lbls = model.visualize(model_inputs)
 
             if(double_network):
                 images.update({'denoised_deepfnf':deepfnf_out.deepfnf_scaled.numpy()[0]})
