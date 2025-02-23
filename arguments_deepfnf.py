@@ -42,6 +42,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--sigmas', nargs='+', type=float, help='A list of numbers')
     parser.add_argument('--thresholds', nargs='+', type=float, help='A list of numbers')
     parser.add_argument('--input_images', nargs='+', type=str, help='A list of numbers')
+    parser.add_argument('--show_insets', type=str_to_bool, default=True, help='size of kernel')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='size of kernel')
     parser.add_argument('--yuv_gllf', type=str_to_bool,default=False,help='Neural network model')
     parser.add_argument('--eval_latency', type=str_to_bool,default=False,help='Neural network model')
