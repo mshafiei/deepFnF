@@ -355,6 +355,7 @@ def visualize(data,k,c, logger, errval, metrics, metrics_list, errors_dict,error
     update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
 
 def test(model, model_path, datapath,logger):
+    tf.config.run_functions_eagerly(True)
     k_val = None
     i_val = None
     if(logger.opts.test_idx != -1):
