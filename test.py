@@ -14,7 +14,9 @@ import time
 # from BilateralParallel import bilateral_rgb
 import cvgutils.Linalg as Linalg
 import cvgutils.Viz as viz
+import cvgutils.Utils as utils
 from timeit import default_timer as timer
+from gllf.gllf_utils import prepare_input_edict
 from easydict import EasyDict as edict
 
 @tf.function
@@ -49,7 +51,7 @@ def update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKe
     errors_dict[levelKey] = mean_mtrcs
     errors[levelKey] = ', '.join(errstr)
     print('mean error: ', errors[levelKey])
-    
+
 def test_idx(datapath,data,k,c,logger,model):
     npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
     alpha = tf.squeeze(data['alpha']).numpy().astype(np.float32)
@@ -107,7 +109,7 @@ def test_idx(datapath,data,k,c,logger,model):
         model_output.denoise, model_output.alpha_map = model_output.output, model_output.llf_alpha_h[0]
         model_output.deepfnf_scaled = inputs.deepfnf_scaled
         gllf_guide = model_output.llf_guide
-    elif(logger.opts.model == "deepfnf_adjustable_scalar_gllf" or logger.opts.model == "tiny_unet_alpha_gllf"):
+    else:
         # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
         net_ft_input = net_input
         inputs = edict()
@@ -133,17 +135,37 @@ def test_idx(datapath,data,k,c,logger,model):
             # model_output.deepfnf_scaled = inputs.deepfnf_scaled
             # gllf_guide = model_output.llf_guide
             logger.addImage(ims, lbls, 'fnf')
-    else:
-        import timeit
-        timing_iterations = 3
-        fn = lambda: eval_model(model, edict(net_ft_input=net_input))
-        t = timeit.Timer(fn, setup=fn)
-        avg_time_sec = t.timeit(number=timing_iterations) / timing_iterations
-        print('avg_time_sec ', avg_time_sec)
 
         # denoise = eval_model(model, edict(net_ft_input=net_input))
     end = timer()
     running_time = int((end - start)*1000)
+
+    original_metrics = None
+    if(errval != None):
+        metrics_pred = errval.eval(ambient[None,...],denoise[None,...])
+        for x in metrics_pred.keys():
+            metrics[x] = np.array(metrics_pred[x])[0]
+        if(denoise_original_deepfnf is not None):
+            original_metrics = {}
+            original_metrics_pred = errval.eval(ambient[None,...],denoise_original_deepfnf[None,...])
+            for x in original_metrics_pred.keys():
+                original_metrics[x] = np.array(original_metrics_pred[x])[0]
+        if(deepfnf_scaled is not None):
+            original_metrics = {}
+            original_metrics_pred = errval.eval(ambient[None,...],deepfnf_scaled.numpy())
+            for x in original_metrics_pred.keys():
+                original_metrics[x] = np.array(original_metrics_pred[x])[0]
+
+        metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
+    print('running_time1: ', running_time)
+    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'running_time':running_time})
+    for key,v in metrics.items():
+        if(not(key in metrics_list[levelKey].keys()) and 'spatial' not in key):
+            metrics_list[levelKey][key] = []
+    for key,v in metrics.items():
+        if('spatial' not in key):
+            metrics_list[levelKey][key].append(np.array(v).item())
+            
     if('denoised_deepfnf' in model_output):
         model_output.denoised_deepfnf = denoised_deepfnf
 
@@ -357,12 +379,12 @@ def test(model, model_path, datapath,logger):
     if(k_val == None or i_val == None):
         for k in range(subset_idx_start, subset_idx_start_end):
             metrics = {}
-            levelKey = 'Level %d' % (6 - k)
+            levelKey = 'Level %d' % (4 - k)
             if(levelKey not in metrics_list.keys()):
                 metrics_list[levelKey] = {}
             startc = 0
             if(len(metrics_list[levelKey])):
-                startc = len(metrics_list[levelKey]['psnr']) - 1 if len(metrics_list[levelKey]['psnr']) > 0 else 0
+                startc = len(metrics_list[levelKey]) - 1 if len(metrics_list[levelKey]) > 0 else 0
                 for i in range(startc):
                     logger.takeStep()
                     continue
@@ -371,10 +393,10 @@ def test(model, model_path, datapath,logger):
                 logger.dumpDictJson(errors_dict,'test_errors','test')
             for c in tqdm.trange(startc,logger.opts.test_set_count,1):
                 #if large image, loop over 448x448 patches
-                levelKey = 'Level %d' % (6 - k)
+                levelKey = 'Level %d' % (4 - k)
                 npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
                 inset_fn = '%03d_%03d.npz' % (k, c)
-                data = np.load(npz_fn,allow_pickle=True)
+                npz_data = np.load(npz_fn,allow_pickle=True)
                 if(logger.opts.large_images):
                     if(logger.insets_json is not None):
                         fn_exists = False
@@ -383,7 +405,7 @@ def test(model, model_path, datapath,logger):
                     if(not fn_exists):
                         continue
                         
-                    h, w = data['ambient'][0,:,:,0].shape
+                    h, w = npz_data['ambient'][0,:,:,0].shape
                     data_cropped = {}
                     results_cropped = {}
                     input_keys = list(data.files)
@@ -396,8 +418,8 @@ def test(model, model_path, datapath,logger):
                         results_cropped_h = {}
                         for i in range(h_iter_ct):
                             for key in input_keys:
-                                if(len(data[key].shape) == 4):
-                                    data_cropped[key] = np.array(data[key][:,i*448:(i+1)*448,j*448:(j+1)*448,:])
+                                if(len(npz_data[key].shape) == 4):
+                                    data_cropped[key] = np.array(npz_data[key][:,i*448:(i+1)*448,j*448:(j+1)*448,:])
                                     res_w, res_h = 0, 0
                                     if(j == w_iter_ct-1):
                                         res_w = pad_w
@@ -405,7 +427,7 @@ def test(model, model_path, datapath,logger):
                                         res_h = pad_h
                                     data_cropped[key] = tf.pad(data_cropped[key], [[0,0],[0,res_h],[0,res_w],[0,0]])
                                 else:
-                                    data_cropped[key] = data[key]
+                                    data_cropped[key] = npz_data[key]
                             #Process images and get model results
                             k,c, logger, results_cropped_ij, datapath, running_time, model = test_idx(datapath,data_cropped,k,c,logger,model)
                             results_cropped_ij.update(data_cropped)
@@ -459,16 +481,35 @@ def test(model, model_path, datapath,logger):
                     #process w/ the model
                     #concatenate
                 else:
-                    with tf.device('/gpu:0'):
-                        k,c, logger, model_output, datapath, running_time, model = test_idx(datapath,data,k,c,logger,model)
-                        
-                        # test_idx(datapath,data,k,c,metrics,metrics_list,logger,model,errors_dict,errors, errval)
-                        logger.dumpDictJson(metrics_list,'test_errors_samples','test')
-                        logger.dumpDictJson(errors_dict,'test_errors','test')
+                    data = {key: tf.convert_to_tensor(npz_data[key],dtype=tf.float32) for key in npz_data.files}
+                    model_inputs = prepare_input_edict(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
+                    model_output = model.forward(model_inputs)
+                    metrics_pred = errval.eval(tf.convert_to_tensor(data['ambient']), model_output.output, output_numpy = True)
+                    
+                    metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
+                    #Create visualization
+                    if(c % logger.opts.visualize_freq == 0):
+                        eagerly_state = tf.config.functions_run_eagerly()
+                        if(not eagerly_state):
+                            tf.config.run_functions_eagerly(True)
+                        subtext = 'image_filename: ' + npz_fn
+                        annotation = errval.create_annotation(metrics_pred, {'psnr':'PSNR', 'lpips':'LPIPS', 'wlpips':'WLPIPS'},['psnr', 'lpips', 'wlpips'])
+                        images, lbls = model.visualize(model_inputs)
+                        logger.addImage(images, lbls,'train',cols=6, annotation={'output':annotation}, image_filename=npz_fn, font_size_scale=2,vertical_spacing_scale=2, subtext=subtext)
+                        if(not eagerly_state):
+                            tf.config.run_functions_eagerly(False)
+                    
+                    if(levelKey not in metrics_list.keys()):
+                        metrics_list[levelKey] = {}
+                    metrics_list[levelKey].update({os.path.basename(npz_fn):metrics_pred})
+                    errors_dict[levelKey] = utils.aggregate_list_of_dicts(metrics_list[levelKey])
+                    errors_dict[levelKey] = utils.divide_dicts(errors_dict[levelKey],len(metrics_list[levelKey]))
+                    logger.dumpDictJson(metrics_list,'test_errors_samples','test')
+                    logger.dumpDictJson(errors_dict,'test_errors','test')
+                logger.takeStep()
                     
     else:
         metrics = {}
         metrics_list = {}
-        with tf.device('/gpu:0'):
-            test_idx(datapath,k_val,i_val,metrics,metrics_list,logger,model,errors_dict,errors, errval)
+        test_idx(datapath,k_val,i_val,metrics,metrics_list,logger,model,errors_dict,errors, errval)
     logger.dumpDictJson(errors_dict,'test_errors','test')

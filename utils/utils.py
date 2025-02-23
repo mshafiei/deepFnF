@@ -18,7 +18,6 @@ FLASH_STRENGTH = 2.
 stop = False
 _orig = None
 
-
 def handler(a, b):
     global stop
     stop = True

@@ -120,17 +120,23 @@ class Net(tiny_unet):
             self.kernels, [-1, imsp[1], imsp[2], self.ksz * self.ksz * 3, 2])
         self.activations['decoding'] = self.kernels
 
+    def visualize(self, inp):
+        model_visualization = self.forward(inp, visualize=True)
+        images, lbls = {}, {}
+        for model_viz in model_visualization:
+            images.update({model_viz.key:model_viz.image})
+            lbls.update({model_viz.key:model_viz.label})
+        return images, lbls
+    
     @tf.function
-    def forward(self, inp):
+    def forward(self, inp, visualize=False):
         inp_is_edict = type(inp) == edict
-        if(inp_is_edict):
-            inp = inp.net_ft_input
-        self.predict_coeff(inp)
+        self.predict_coeff(inp.net_ft_input)
         self.create_basis()
         self.combine()
 
         filtered_ambient = tfu.apply_filtering(
-            inp[:, :, :, :3], self.kernels[..., 0])
+            inp.net_ft_input[:, :, :, :3], self.kernels[..., 0])
 
         # "Bilinearly upsample kernels + filtering"
         # is equivalent to
@@ -142,9 +148,21 @@ class Net(tiny_unet):
         #     smoothed_ambient, self.kernels[..., 1], dilation=4)
         # filtered_ambient = filtered_ambient + smoothed_ambient
         denoised = filtered_ambient #* self.scale
-        if(inp_is_edict):
+        
+        if(visualize):
+            ambient_scaled = tfu.camera_to_rgb(
+                inp.net_ft_input[:, :, :, :3] / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=True)
+            flash_scaled = tfu.camera_to_rgb(
+                inp.net_ft_input[:, :, :, 3:6], inp.color_matrix, inp.adapt_matrix, do_gamma_correct=True)
+            output = tfu.camera_to_rgb(
+                denoised / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=True)
+            
+            ambient_scaled = edict(image=ambient_scaled, label='Noisy Ambient', key='noisy_ambient')
+            flash_scaled = edict(image=flash_scaled, label='Noisy Flash', key='noisy_flash')
+            output = edict(image=output, label='DeepFnF', key='output')
+            return [flash_scaled, ambient_scaled, output]
+        else:
             output=edict()
             output.output = denoised
             return output
-        else:
-            return denoised
+        

@@ -3,6 +3,8 @@ import numpy as np
 import tensorflow
 import utils.tf_utils as tfu
 import utils.utils as ut
+from easydict import EasyDict as edict
+
 @tf.function
 def prepare_input(example, clamp=False, std_input=True):
     alpha = example['alpha']
@@ -37,6 +39,19 @@ def prepare_input(example, clamp=False, std_input=True):
         net_input = noisy
 
     return net_input, alpha, noisy_flash, noisy_ambient
+    
+def prepare_input_edict(example, clamp=False, std_input=True):
+    net_input, alpha, noisy_flash, noisy_ambient = prepare_input(example, clamp=False, std_input=True)
+    model_inputs = edict()
+    model_inputs.net_ft_input = net_input
+    model_inputs.color_matrix = example['color_matrix']
+    model_inputs.adapt_matrix = example['adapt_matrix']
+    model_inputs.alpha = example['alpha']
+    model_inputs.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
+        img / alpha, example['color_matrix'], example['adapt_matrix'])
+    model_inputs.flash_wb_fn = lambda img: tfu.camera_to_rgb(
+        img, example['color_matrix'], example['adapt_matrix'])
+    return model_inputs
     
 def radial_basis(i, level, w_i, sigma_i, basis_type):
     i_shape = i.shape

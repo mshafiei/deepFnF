@@ -19,7 +19,12 @@ class Net(gllf_layer_radial):
             exit(0)
 
     def visualize(self, inpt):
-        return self.forward(inpt, visualize=True)
+        model_visualization = self.forward(inpt, visualize=True)
+        images, lbls = {}, {}
+        for model_viz in model_visualization:
+            images.update({model_viz.key:model_viz.image})
+            lbls.update({model_viz.key:model_viz.label})
+        return images, lbls
 
     @tf.function
     def forward(self, inp, visualize=False):
@@ -66,8 +71,19 @@ class Net(gllf_layer_radial):
 
         if(visualize):
             visualization = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
+            output = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=False)
+            
             for i in range(len(visualization)):
                 visualization[i].image = tfu.gamma_correct(visualization[i].image)
+            input_flash = flash_scaled
+            input_ambient = ambient_scaled
+            visualization = [edict(image=tf.ones((100,100,3)), label='Blank', key='blank_0')] + visualization
+            visualization = [edict(image=tf.ones((100,100,3)), label='Blank', key='blank_1')] + visualization
+            visualization = [edict(image=tf.ones((100,100,3)), label='Blank', key='blank_2')] + visualization
+            visualization = [edict(image=tfu.gamma_correct(output), label='UNet+GLLF', key='output')] + visualization
+            visualization = [edict(image=tfu.gamma_correct(input_ambient), label='Noisy Ambient', key='noisy_ambient')] + visualization
+            visualization = [edict(image=tfu.gamma_correct(input_flash), label='Noisy Flash', key='noisy_flash')] + visualization
+            
             return visualization
         else:
             output=edict()
