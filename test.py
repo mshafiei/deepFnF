@@ -52,133 +52,6 @@ def update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKe
     errors[levelKey] = ', '.join(errstr)
     print('mean error: ', errors[levelKey])
 
-def test_idx(datapath,data,k,c,logger,model):
-    npz_fn = '%s/%d/%d.npz' % (datapath, k, c)
-    alpha = tf.squeeze(data['alpha']).numpy().astype(np.float32)
-    print('alpha ', alpha, ' npz ', npz_fn)
-    dimmed_ambient, _ = tfu.dim_image(data['ambient'], alpha=alpha)
-    dimmed_warped_ambient, _ = tfu.dim_image(
-        data['warped_ambient'], alpha=alpha)
-
-    # Make the flash brighter by increasing the brightness of the
-    # flash-only image.
-    flash = data['flash_only'] * ut.FLASH_STRENGTH + dimmed_ambient
-    warped_flash = data['warped_flash_only'] * \
-        ut.FLASH_STRENGTH + dimmed_warped_ambient
-
-    noisy_ambient = data['noisy_ambient']
-    noisy_flash = data['noisy_warped_flash']
-    # noisy_flash = warped_flash[0,0,0,0,:,:,:,:]
-    noisy = tf.concat([noisy_ambient, noisy_flash], axis=-1)
-    noise_std = tfu.estimate_std(
-        noisy, data['sig_read'], data['sig_shot'])
-    net_input = tf.concat([noisy, noise_std], axis=-1)
-    
-    
-    deepfnf_scaled = None
-    model_output = edict()
-    start = timer()
-    if(logger.opts.model == 'deepfnf_llf'):
-        denoised, flash = eval_original_Deepfnf(model, net_input, alpha)
-        denoise = model.llf(denoised, flash)
-    elif(logger.opts.model == 'unet_llf'):
-        denoised, flash = eval_original_model(model, net_input, alpha)
-        denoise = model.llf(denoised, flash)
-    elif(logger.opts.model == 'deepfnf_combine_fft' or logger.opts.model == 'deepfnf_combine_laplacian' or logger.opts.model == 'net_flash_image' or logger.opts.model == 'deepfnf_llf_diffable'or logger.opts.model == 'flash'or logger.opts.model == 'noisy'):
-        denoise = eval_model_w_alpha(model, net_input, alpha)
-        # denoise_original_deepfnf = eval_original_Deepfnf(model, net_input, alpha)[0]/alpha
-        # laplacian_pyramid = eval_laplacian_interpolation(model, net_input,alpha)
-    elif(logger.opts.model == 'deepfnf_combine_laplacian_pixelwise'):
-        denoise = eval_model_w_alpha(model, net_input, data['alpha'])
-        laplacianWeights = model.getLaplacianWeights()
-    elif(logger.opts.model == "net_llf_tf2_tf_Deepfnf_Deepfnf_flash" or logger.opts.model == "net_llf_tf2_tf_local_alpha_Deepfnf_alpha" or logger.opts.model == 'deepfnf_llf_alpha_map_unet' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_v2' or logger.opts.model == 'deepfnf_llf_alpha_map_unet_tf'):
-        # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
-        denoised_deepfnf = model.deepfnf_model.forward(net_input)
-        deepfnf_scaled = tfu.camera_to_rgb(
-            denoised_deepfnf / tf.squeeze(alpha), data['color_matrix'], data['adapt_matrix'])
-        noisy_flash_scaled = tfu.camera_to_rgb(
-            noisy_flash, data['color_matrix'], data['adapt_matrix'])
-        net_ft_input = tf.concat((net_input, denoised_deepfnf), axis=-1)
-        inputs = edict()
-        inputs.net_ft_input = net_ft_input
-        inputs.noisy_flash_scaled = noisy_flash_scaled
-        inputs.deepfnf_scaled = deepfnf_scaled
-        inputs.color_matrix = data['color_matrix']
-        inputs.adapt_matrix = data['adapt_matrix']
-        model_output = edict(model.forward(inputs))
-        model_output.denoise, model_output.alpha_map = model_output.output, model_output.llf_alpha_h[0]
-        model_output.deepfnf_scaled = inputs.deepfnf_scaled
-        gllf_guide = model_output.llf_guide
-    else:
-        # denoised, flash = eval_original_Deepfnf(model.deepfnf_model, net_input, alpha)
-        net_ft_input = net_input
-        inputs = edict()
-        inputs.net_ft_input = net_ft_input
-        inputs.color_matrix = data['color_matrix']
-        inputs.adapt_matrix = data['adapt_matrix']
-        inputs.alpha = data['alpha']
-        model_output = edict(model.forward(inputs))
-        eagerly_state = tf.config.functions_run_eagerly()
-        if(c % logger.opts.visualize_freq == 0):
-            if(not eagerly_state):
-                tf.config.run_functions_eagerly(True)
-            visualize = model.visualize(inputs)
-            if(not eagerly_state):
-                tf.config.run_functions_eagerly(False)
-            ims = {}
-            lbls = {}
-            for v in visualize:
-                ims.update({v.key:v.image})
-                lbls.update({v.key:v.label})
-            ims.update({'output':model_output.output})
-            lbls.update({'output':'model_output'})
-            # model_output.deepfnf_scaled = inputs.deepfnf_scaled
-            # gllf_guide = model_output.llf_guide
-            logger.addImage(ims, lbls, 'fnf')
-
-        # denoise = eval_model(model, edict(net_ft_input=net_input))
-    end = timer()
-    running_time = int((end - start)*1000)
-
-    original_metrics = None
-    if(errval != None):
-        metrics_pred = errval.eval(ambient[None,...],denoise[None,...])
-        for x in metrics_pred.keys():
-            metrics[x] = np.array(metrics_pred[x])[0]
-        if(denoise_original_deepfnf is not None):
-            original_metrics = {}
-            original_metrics_pred = errval.eval(ambient[None,...],denoise_original_deepfnf[None,...])
-            for x in original_metrics_pred.keys():
-                original_metrics[x] = np.array(original_metrics_pred[x])[0]
-        if(deepfnf_scaled is not None):
-            original_metrics = {}
-            original_metrics_pred = errval.eval(ambient[None,...],deepfnf_scaled.numpy())
-            for x in original_metrics_pred.keys():
-                original_metrics[x] = np.array(original_metrics_pred[x])[0]
-
-        metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
-    print('running_time1: ', running_time)
-    metrics.update({'mse':npu.get_mse(denoise, ambient),'psnr':npu.get_psnr(denoise, ambient),'running_time':running_time})
-    for key,v in metrics.items():
-        if(not(key in metrics_list[levelKey].keys()) and 'spatial' not in key):
-            metrics_list[levelKey][key] = []
-    for key,v in metrics.items():
-        if('spatial' not in key):
-            metrics_list[levelKey][key].append(np.array(v).item())
-            
-    if('denoised_deepfnf' in model_output):
-        model_output.denoised_deepfnf = denoised_deepfnf
-
-    model_output.noisy_flash_scaled = tfu.camera_to_rgb(
-            noisy_flash, data['color_matrix'], data['adapt_matrix'])
-    model_output.noisy_ambient_scaled = tfu.camera_to_rgb(
-            noisy_ambient / alpha, data['color_matrix'], data['adapt_matrix'])
-    model_output.ambient_scaled = tfu.camera_to_rgb(
-            data['ambient'], data['color_matrix'], data['adapt_matrix'])
-    # model_output.denoised_deepfnf
-    print('forward pass takes ', running_time, 'ms')
-    return k,c, logger, model_output, datapath, running_time, model
-    
 def visualize(data,k,c, logger, errval, metrics, metrics_list, errors_dict,errors,denoised_deepfnf, datapath, running_time, model):
     levelKey = 'Level %d' % (6 - k)
     ambient = data['ambient']
@@ -353,8 +226,83 @@ def visualize(data,k,c, logger, errval, metrics, metrics_list, errors_dict,error
     logger.takeStep()
 
     update_reduced_errors_from_sampls(metrics_list, errors_dict, errors, levelKey)
+    
 
+def test_single_image(data, logger, model, errval, metrics, metrics_list, errors_dict, levelKey, iteration_count, filename):
+    """Process a single test image through the model and compute metrics.
+
+    Args:
+        npz_data: Dictionary containing image data loaded from npz file
+        logger: Logger object for saving results and visualizations
+        model: Neural network model to evaluate
+        errval: Error evaluation object for computing metrics
+        metrics: Dictionary to store computed metrics
+        metrics_list: Dictionary storing metrics for all processed images
+        errors_dict: Dictionary storing aggregated error metrics
+        levelKey: String key indicating the current image resolution level
+        npz_fn: Filename of the npz data being processed
+        iteration_count: Current iteration number
+    """
+    # Convert npz data to tensors
+    
+    
+    # Prepare inputs for the model, applying optional clamping and standardization
+    model_inputs = prepare_input_edict(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
+    
+    # Run inference through the model
+    model_output = model.forward(model_inputs)
+    
+    ambient = tfu.camera_to_rgb(
+            data['ambient'], data['color_matrix'], data['adapt_matrix'])
+    
+    if(logger.opts.normalize_before_gllf):
+        output = tfu.camera_to_rgb(
+            model_output.output / data['alpha'], data['color_matrix'], data['adapt_matrix'])
+    else:
+        output = model_output.output
+    # Compute quality metrics between model output and ground truth ambient image
+    metrics_pred = errval.eval(tf.convert_to_tensor(ambient), output, output_numpy = True)
+    
+    # Update metrics dictionary with computed values
+    metrics.update({'psnr':metrics_pred['psnr'], 'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
+    
+    # Periodically save visualizations based on visualize_freq
+    if(iteration_count % logger.opts.visualize_freq == 0):
+        # Toggle eager execution for visualization
+        eagerly_state = tf.config.functions_run_eagerly()
+        if(not eagerly_state):
+            tf.config.run_functions_eagerly(True)
+            
+        # Create visualization with metrics annotations
+        subtext = 'image_filename: ' + filename
+        annotation = errval.create_annotation(metrics_pred, {'psnr':'PSNR', 'lpips':'LPIPS', 'wlpips':'WLPIPS'},['psnr', 'lpips', 'wlpips'])
+        images, lbls = model.visualize(model_inputs)
+        
+        # Save visualizations through logger
+        logger.addImage(images, lbls,'test',cols=6, annotation={'output':annotation}, image_filename=filename, font_size_scale=2,vertical_spacing_scale=2, subtext=subtext)
+        logger.addIndividualImages({'output':images['output']}, {'output':lbls['output']})
+        
+        # Restore previous eager execution state
+        if(not eagerly_state):
+            tf.config.run_functions_eagerly(False)
+    
+    # Initialize metrics list for new level if needed
+    if(levelKey not in metrics_list.keys()):
+        metrics_list[levelKey] = {}
+        
+    # Update metrics lists with results from this image
+    metrics_list[levelKey].update({os.path.basename(filename):metrics_pred})
+    
+    # Compute average metrics across all processed images at this level
+    errors_dict[levelKey] = utils.aggregate_list_of_dicts(metrics_list[levelKey])
+    errors_dict[levelKey] = utils.divide_dicts(errors_dict[levelKey],len(metrics_list[levelKey]))
+    
+    # Save updated metrics to disk
+    logger.dumpDictJson(metrics_list,'test_errors_samples','test')
+    logger.dumpDictJson(errors_dict,'test_errors','test')
+    
 def test(model, model_path, datapath,logger):
+    errval = Linalg.ErrEvalTF2('psnr,lpips, wlpips',image_size=448)
     tf.config.run_functions_eagerly(True)
     k_val = None
     i_val = None
@@ -365,7 +313,7 @@ def test(model, model_path, datapath,logger):
     errors = {}
     errors_dict = {}
     # logger.dumpDictJson(stats,'model_stats','train')
-    errval = Linalg.ErrEvalTF2('ssim,msssim,mse,psnr,lpips, wlpips, wlpips_abs, spatial_euclidean_distance, spatial_lpips, spatial_wlpips',image_size=448)
+    # errval = Linalg.ErrEvalTF2('ssim,msssim,mse,psnr,lpips, wlpips, wlpips_abs, spatial_euclidean_distance, spatial_lpips, spatial_wlpips',image_size=448)
     metrics_list = logger.loadDictJson('test_errors_samples','test')
     if(metrics_list is None):
         metrics_list = {}
@@ -482,31 +430,32 @@ def test(model, model_path, datapath,logger):
                     #process w/ the model
                     #concatenate
                 else:
+                    # Original code (backup)
+                    # data = {key: tf.convert_to_tensor(npz_data[key],dtype=tf.float32) for key in npz_data.files}
+                    # model_inputs = prepare_input_edict(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
+                    # model_output = model.forward(model_inputs)
+                    # metrics_pred = errval.eval(tf.convert_to_tensor(data['ambient']), model_output.output, output_numpy = True)
+                    # metrics.update({'psnr':metrics_pred['psnr'], 'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
+                    # if(c % logger.opts.visualize_freq == 0):
+                    #     eagerly_state = tf.config.functions_run_eagerly()
+                    #     if(not eagerly_state):
+                    #         tf.config.run_functions_eagerly(True)
+                    #     subtext = 'image_filename: ' + npz_fn
+                    #     annotation = errval.create_annotation(metrics_pred, {'psnr':'PSNR', 'lpips':'LPIPS', 'wlpips':'WLPIPS'},['psnr', 'lpips', 'wlpips'])
+                    #     images, lbls = model.visualize(model_inputs)
+                    #     logger.addImage(images, lbls,'test',cols=6, annotation={'output':annotation}, image_filename=npz_fn, font_size_scale=2,vertical_spacing_scale=2, subtext=subtext)
+                    #     logger.addIndividualImages({'output':images['output']}, {'output':lbls['output']})
+                    #     if(not eagerly_state):
+                    #         tf.config.run_functions_eagerly(False)
+                    # if(levelKey not in metrics_list.keys()):
+                    #     metrics_list[levelKey] = {}
+                    # metrics_list[levelKey].update({os.path.basename(npz_fn):metrics_pred})
+                    # errors_dict[levelKey] = utils.aggregate_list_of_dicts(metrics_list[levelKey])
+                    # errors_dict[levelKey] = utils.divide_dicts(errors_dict[levelKey],len(metrics_list[levelKey]))
+                    # logger.dumpDictJson(metrics_list,'test_errors_samples','test')
+                    # logger.dumpDictJson(errors_dict,'test_errors','test')
                     data = {key: tf.convert_to_tensor(npz_data[key],dtype=tf.float32) for key in npz_data.files}
-                    model_inputs = prepare_input_edict(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
-                    model_output = model.forward(model_inputs)
-                    metrics_pred = errval.eval(tf.convert_to_tensor(data['ambient']), model_output.output, output_numpy = True)
-                    
-                    metrics.update({'psnr':metrics_pred['psnr'], 'ssim':metrics_pred['ssim'],'msssim':metrics_pred['msssim'],'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
-                    #Create visualization
-                    if(c % logger.opts.visualize_freq == 0):
-                        eagerly_state = tf.config.functions_run_eagerly()
-                        if(not eagerly_state):
-                            tf.config.run_functions_eagerly(True)
-                        subtext = 'image_filename: ' + npz_fn
-                        annotation = errval.create_annotation(metrics_pred, {'psnr':'PSNR', 'lpips':'LPIPS', 'wlpips':'WLPIPS'},['psnr', 'lpips', 'wlpips'])
-                        images, lbls = model.visualize(model_inputs)
-                        logger.addImage(images, lbls,'train',cols=6, annotation={'output':annotation}, image_filename=npz_fn, font_size_scale=2,vertical_spacing_scale=2, subtext=subtext)
-                        if(not eagerly_state):
-                            tf.config.run_functions_eagerly(False)
-                    
-                    if(levelKey not in metrics_list.keys()):
-                        metrics_list[levelKey] = {}
-                    metrics_list[levelKey].update({os.path.basename(npz_fn):metrics_pred})
-                    errors_dict[levelKey] = utils.aggregate_list_of_dicts(metrics_list[levelKey])
-                    errors_dict[levelKey] = utils.divide_dicts(errors_dict[levelKey],len(metrics_list[levelKey]))
-                    logger.dumpDictJson(metrics_list,'test_errors_samples','test')
-                    logger.dumpDictJson(errors_dict,'test_errors','test')
+                    test_single_image(data, logger, model, errval, metrics, metrics_list, errors_dict, levelKey, c, npz_fn)
                 logger.takeStep()
                     
     else:

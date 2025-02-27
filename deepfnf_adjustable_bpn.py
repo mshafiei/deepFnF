@@ -156,11 +156,13 @@ class Net(tiny_unet):
                 inp.net_ft_input[:, :, :, 3:6], inp.color_matrix, inp.adapt_matrix, do_gamma_correct=True)
             output = tfu.camera_to_rgb(
                 denoised / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=True)
-            
+            ambient = tfu.camera_to_rgb(
+                inp.ambient, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
             ambient_scaled = edict(image=ambient_scaled, label='Noisy Ambient', key='noisy_ambient')
             flash_scaled = edict(image=flash_scaled, label='Noisy Flash', key='noisy_flash')
             output = edict(image=output, label='DeepFnF', key='output')
-            return [flash_scaled, ambient_scaled, output]
+            ambient = edict(image=tfu.gamma_correct(ambient), label='Ambient', key='ambient')
+            return [flash_scaled, ambient_scaled, ambient, output]
         else:
             output=edict()
             output.output = denoised

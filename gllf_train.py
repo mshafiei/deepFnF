@@ -6,7 +6,7 @@ import tensorflow as tf
 import os
 import timeit
 import numpy as np
-from test import test
+from test import test, test_single_image
 import gllf_network_utils as net_utils
 from gllf.gllf_utils import prepare_input
 import utils.tf_utils as tfu
@@ -15,22 +15,14 @@ from utils.dataset_prefetch_nthreads import TrainSet as TrainSet_prefetch_nthrea
 from utils.dataset import Dataset
 from utils.dataset_filelock import TrainSet as Trainset_filelock
 import cvgutils.Viz as Viz
+import cvgutils.Linalg as linalg
 import keras
 from datetime import datetime
-from cvgutils.nn.lpips_tf2.models_tensorflow.lpips_tensorflow import load_perceptual_models, learned_perceptual_metric_model
 import cv2
 from easydict import EasyDict as edict
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
-image_size=448
-local_ckpt_dir = '/home/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weights/keras'
-server_ckpt_dir = '/mshvol2/users/mohammad/cvgutils/cvgutils/nn/lpips_tf2/weights/keras'
-ckpt_dir = local_ckpt_dir if os.path.exists(local_ckpt_dir) else server_ckpt_dir
-vgg_ckpt_fn = os.path.join(ckpt_dir, 'vgg', 'exported.weights.h5')
-lin_ckpt_fn = os.path.join(ckpt_dir, 'lin', 'exported.weights.h5')
-lpips_net, lpips_lin = load_perceptual_models(image_size, vgg_ckpt_fn, lin_ckpt_fn)
-lpips = learned_perceptual_metric_model(lpips_net, lpips_lin, image_size)
-wlpips = learned_perceptual_metric_model(lpips_net, lpips_lin, image_size, 'wlpips')
+lpips, wlpips = linalg.load_lpips()
 
 logger = Viz.logger(opts,opts.__dict__)
 _, weight_dir = logger.path_parse('train')
@@ -152,6 +144,7 @@ with tf.device('/gpu:0'):
         else:
             outputs.net_ft_input = net_input
         
+        
         outputs.noisy_ambient_scaled = tfu.camera_to_rgb(
             noisy_ambient / alpha, example['color_matrix'], example['adapt_matrix'])
         
@@ -171,7 +164,8 @@ with tf.device('/gpu:0'):
                                  noisy_flash_scaled=outputs.noisy_flash_scaled,
                                  color_matrix=example['color_matrix'],
                                  adapt_matrix=example['adapt_matrix'],
-                                 alpha=example['alpha']))
+                                 alpha=example['alpha'],
+                                 ambient=example['ambient']))
         output_dict=edict(model_input)
         model_input.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
             img / alpha, example['color_matrix'], example['adapt_matrix'])
@@ -394,13 +388,13 @@ with tf.device('/gpu:0'):
             if(double_network):
                 annotation_deepfnf = '<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(additional_loss['psnr_deepfnf'],additional_loss['lpips_deepfnf'],additional_loss['wlpips_deepfnf'])
             annotation_ours = '<br>PSNR:%.3f<br>LPIPS:%.3f<br>WLPIPS:%.3f'%(additional_loss['psnr_refined'],additional_loss['lpips_refined'],additional_loss['wlpips_refined'])
-            annotation = {'flash':None,'noisy':None,'ambient':None,'denoised_gllf':annotation_ours,'alpha_map':None}
+            annotation = {'flash':None,'noisy':None,'ambient':None,'output':annotation_ours,'alpha_map':None}
             if(double_network):
                 annotation.update({'denoised_deepfnf':annotation_deepfnf})
             # exposure = 4 if opts.llf_sigma == 0 else 0
             
-            images = {'flash':model_inputs.noisy_flash_scaled.numpy()[0], 'noisy':deepfnf_out.noisy_ambient_scaled.numpy()[0], 'ambient':deepfnf_out.ambient_scaled.numpy()[0], 'denoised_gllf':val_output.model_output.output}
-            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','denoised_gllf':'DeepFnF+GLLF'}
+            images = {'flash':model_inputs.noisy_flash_scaled.numpy()[0], 'noisy':deepfnf_out.noisy_ambient_scaled.numpy()[0], 'ambient':deepfnf_out.ambient_scaled.numpy()[0], 'output':val_output.model_output.output}
+            lbls = {'flash':'Flash','noisy':'Noisy','ambient':'Ambient','output':'DeepFnF+GLLF'}
 
             if(hasattr(model, 'visualize')):
                 images, lbls = model.visualize(model_inputs)
@@ -497,6 +491,11 @@ with tf.device('/gpu:0'):
             data.update(data_gt)
             net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
             for _ in range(int(MAXITER)):
+                errval = linalg.ErrEvalTF2('psnr,lpips, wlpips',image_size=448)
+                data['noisy_ambient'] = noisy_ambient
+                data['noisy_flash'] = noisy_flash
+                data['alpha'] = alpha
+                test_single_image(data, logger, model, errval, {}, {}, {}, 0, 0, 'filename')
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data, logger.opts.double_network)
                 niter += 1
         else:

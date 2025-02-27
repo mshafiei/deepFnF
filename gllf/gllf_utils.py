@@ -41,16 +41,27 @@ def prepare_input(example, clamp=False, std_input=True):
     return net_input, alpha, noisy_flash, noisy_ambient
     
 def prepare_input_edict(example, clamp=False, std_input=True):
-    net_input, alpha, noisy_flash, noisy_ambient = prepare_input(example, clamp=False, std_input=True)
+    noisy_ambient = example['noisy_ambient']
+    noisy_flash = example['noisy_flash']
+    sig_read = example['sig_read']
+    sig_shot = example['sig_shot']
+    alpha = example['alpha']
+    if(clamp):
+        noisy_ambient = tf.maximum(noisy_ambient,0)
+        noisy_flash = tf.maximum(noisy_flash,0)
+    
+    noisy = tf.concat([noisy_ambient, noisy_flash], axis=-1)
+    if(std_input):
+        noise_std = tfu.estimate_std(noisy, sig_read, sig_shot)
+        net_input = tf.concat([noisy, noise_std], axis=-1)
+    else:
+        net_input = noisy
     model_inputs = edict()
     model_inputs.net_ft_input = net_input
     model_inputs.color_matrix = example['color_matrix']
     model_inputs.adapt_matrix = example['adapt_matrix']
     model_inputs.alpha = example['alpha']
-    model_inputs.noflash_wb_fn = lambda img: tfu.camera_to_rgb(
-        img / alpha, example['color_matrix'], example['adapt_matrix'])
-    model_inputs.flash_wb_fn = lambda img: tfu.camera_to_rgb(
-        img, example['color_matrix'], example['adapt_matrix'])
+    model_inputs.ambient = example['ambient']
     return model_inputs
     
 def radial_basis(i, level, w_i, sigma_i, basis_type):
