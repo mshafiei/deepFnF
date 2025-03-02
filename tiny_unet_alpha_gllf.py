@@ -31,7 +31,6 @@ class Net(gllf_layer_radial):
         alpha = inp.alpha
         color_matrix = inp.color_matrix
         adapt_matrix = inp.adapt_matrix
-        ambient = inp.ambient
         inp = inp.net_ft_input
         
         if(self.sources_mode == 3):
@@ -78,6 +77,7 @@ class Net(gllf_layer_radial):
                 visualization[i].image = tfu.gamma_correct(visualization[i].image)
             input_flash = flash_scaled
             input_ambient = ambient_scaled
+            ambient = inp.ambient
             ambient = tfu.camera_to_rgb(
                 ambient, color_matrix, adapt_matrix, do_gamma_correct=False)
             visualization = [edict(image=tf.ones((100,100,3)), label='Blank', key='blank_0')] + visualization
