@@ -28,20 +28,21 @@ class Net(gllf_layer_radial):
 
     @tf.function
     def forward(self, inp, visualize=False):
-        alpha = inp.alpha
-        color_matrix = inp.color_matrix
-        adapt_matrix = inp.adapt_matrix
-        inp = inp.net_ft_input
+        # alpha = inp.alpha
+        # color_matrix = inp.color_matrix
+        # adapt_matrix = inp.adapt_matrix
+        # ambient = inp.ambient
+        # inp = inp.net_ft_input
         
         if(self.sources_mode == 3):
-            _, h, w, _ = inp.shape
-            out, skips = self.resize_encode(inp)
+            _, h, w, _ = inp.net_ft_input.shape
+            out, skips = self.resize_encode(inp.net_ft_input)
             direct_denoised = self.resize_decode(out, skips, h, w)
             # direct_denoised, image_weights = self.resize_joint_decode(out, skips, h, w)
             image_weights = self.decode_per_layer(out, skips, self.max_levels, "decode_per_layer_")
             self.image_weights = [image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1]
         else:
-            self.resize_encode(inp)
+            self.resize_encode(inp.net_ft_input)
         
         #double head neural network
         #one head predicts denoised image
@@ -52,9 +53,9 @@ class Net(gllf_layer_radial):
         #Pass to GLLF
 
         ambient_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, :3] / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
+            inp.net_ft_input[:, :, :, :3] / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
         flash_scaled = tfu.camera_to_rgb(
-            inp[:, :, :, 3:6], color_matrix, adapt_matrix, do_gamma_correct=False)
+            inp.net_ft_input[:, :, :, 3:6], inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
         
         source_images = []
         if(self.sources_mode >=1):
@@ -65,7 +66,7 @@ class Net(gllf_layer_radial):
 
         if(self.sources_mode >=3):
             direct_denoised = tfu.camera_to_rgb(
-                direct_denoised / alpha, color_matrix, adapt_matrix, do_gamma_correct=False)
+                direct_denoised / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
             source_images.append(direct_denoised)
 
 
@@ -77,9 +78,8 @@ class Net(gllf_layer_radial):
                 visualization[i].image = tfu.gamma_correct(visualization[i].image)
             input_flash = flash_scaled
             input_ambient = ambient_scaled
-            ambient = inp.ambient
             ambient = tfu.camera_to_rgb(
-                ambient, color_matrix, adapt_matrix, do_gamma_correct=False)
+                inp.ambient, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
             visualization = [edict(image=tf.ones((100,100,3)), label='Blank', key='blank_0')] + visualization
             visualization = [edict(image=tf.ones((100,100,3)), label='Blank', key='blank_1')] + visualization
             visualization = [edict(image=tfu.gamma_correct(ambient), label='Ambient', key='ambient')] + visualization

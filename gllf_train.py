@@ -20,7 +20,7 @@ import keras
 from datetime import datetime
 import cv2
 from easydict import EasyDict as edict
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 lpips, wlpips = linalg.load_lpips()
 
@@ -154,9 +154,7 @@ with tf.device('/gpu:0'):
         outputs.noisy_flash = tfu.camera_to_rgb(
             noisy_flash, example['color_matrix'], example['adapt_matrix'])
         
-        outputs.ambient_scaled= tfu.camera_to_rgb(
-            example['ambient'],
-            example['color_matrix'], example['adapt_matrix'])
+        outputs.ambient = example['ambient']
         
         model_input.update(edict(noisy_ambient_scaled=outputs.noisy_ambient_scaled,
                                  noisy_flash=outputs.noisy_flash, 
