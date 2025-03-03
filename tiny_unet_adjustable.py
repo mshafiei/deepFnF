@@ -7,13 +7,14 @@ import utils.tf_utils as tfu
 from tiny_unet import Net as tiny_unet
 from easydict import EasyDict as edict
 class Net(tiny_unet):
-    def __init__(self, downsample_ct=0, unet_output_size=3, channels_count_factor=1, use_up_block=True, per_layer_decoder_nchannels=3):
+    def __init__(self, downsample_ct=0, unet_output_size=3, channels_count_factor=1, use_up_block=True, per_layer_decoder_nchannels=3, has_image_weights=False):
         super().__init__(unet_output_size=unet_output_size, channels_count_factor=channels_count_factor)
         self.downsample_ct = downsample_ct
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor)//(2**self.downsample_ct))
         self.channel_count_end = lambda x: max(self.output_dim_size, int(x * self.channels_count_factor)//(2**self.downsample_ct))
         self.use_up_block = use_up_block
         self.per_layer_decoder_nchannels = per_layer_decoder_nchannels
+        self.has_image_weights = has_image_weights
 
 
     def encode(self, out, pfx=''):
@@ -60,10 +61,18 @@ class Net(tiny_unet):
     
         # for i in range(5):
         #     out, out_layer = self.up_and_out(out, self.channel_count(512//i), skips[], self.start_level == 0 and self.max_levels > 1, pfx + 'up1')
-        decode_layers.d1 = tf.ones((1,2,2,3,1))#self.up_and_out(out, self.channel_count(512), skips.d5, True, pfx + 'up1')
-        decode_layers.d2 = tf.ones((1,4,4,3,1))#self.up_and_out(out, self.channel_count(256), skips.d4, True, pfx + 'up2')
-        decode_layers.d3 = tf.ones((1,7,7,3,1))#self.up_and_out(out, self.channel_count(128), skips.d3, True, pfx + 'up3')
-        decode_layers.d4 = tf.ones((1,14,14,3,1))#self.up_and_out(out, self.channel_count(64), skips.d2, True, pfx + 'up4')
+        if(self.has_image_weights):
+            out, skip1 = self.down_block(out, self.channel_count(512), pfx + 'down1')
+            out, skip2 = self.down_block(out, self.channel_count(1024), pfx + 'down2')
+            out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, pfx + 'up1')
+            out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, pfx + 'up2')
+            out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, pfx + 'up3')
+            _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, pfx + 'up4')
+        else:
+            decode_layers.d1 = tf.ones((1,2,2,3,1))#self.up_and_out(out, self.channel_count(512), skips.d5, True, pfx + 'up1')
+            decode_layers.d2 = tf.ones((1,4,4,3,1))#self.up_and_out(out, self.channel_count(256), skips.d4, True, pfx + 'up2')
+            decode_layers.d3 = tf.ones((1,7,7,3,1))#self.up_and_out(out, self.channel_count(128), skips.d3, True, pfx + 'up3')
+            decode_layers.d4 = tf.ones((1,14,14,3,1))#self.up_and_out(out, self.channel_count(64), skips.d2, True, pfx + 'up4')
         
         return decode_layers
 

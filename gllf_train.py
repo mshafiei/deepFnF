@@ -431,7 +431,7 @@ with tf.device('/gpu:0'):
             if('filename' in example.keys()):
                 logger.addImage(images, lbls,'train',cols=4, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
     
-        if((niter == 0 or niter % opts.visualize_freq == 0 ) and opts.no_visualize is False):
+        if((niter == 0 or niter % opts.visualize_freq_train == 0 ) and opts.no_visualize is False):
             eagerly_state = tf.config.functions_run_eagerly()
             if(not eagerly_state):
                 tf.config.run_functions_eagerly(True)
@@ -489,11 +489,11 @@ with tf.device('/gpu:0'):
             data.update(data_gt)
             net_input, alpha, noisy_flash, noisy_ambient = prepare_input(data,clamp=logger.opts.clamp_dataset, std_input=logger.opts.std_input)
             for _ in range(int(MAXITER)):
-                errval = linalg.ErrEvalTF2('psnr,lpips, wlpips',image_size=448)
-                data['noisy_ambient'] = noisy_ambient
-                data['noisy_flash'] = noisy_flash
-                data['alpha'] = alpha
-                test_single_image(data, logger, model, errval, {}, {}, {}, 0, 0, 'filename')
+                # errval = linalg.ErrEvalTF2('psnr,lpips, wlpips',image_size=448)
+                # data['noisy_ambient'] = noisy_ambient
+                # data['noisy_flash'] = noisy_flash
+                # data['alpha'] = alpha
+                # test_single_image(data, logger, model, errval, {}, {}, {}, 0, 0, 'filename')
                 training_iterate(net_input, alpha, noisy_flash, noisy_ambient, niter, data, logger.opts.double_network)
                 niter += 1
         else:

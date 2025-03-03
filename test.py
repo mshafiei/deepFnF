@@ -160,7 +160,7 @@ def visualize(data,k,c, logger, errval, metrics, metrics_list, errors_dict,error
 
     blank = inv_kernel * 0 + 1
     cols = 5
-    if(c % logger.opts.visualize_freq == 0 and logger.opts.no_visualize is False):
+    if(c % logger.opts.visualize_freq_test == 0 and logger.opts.no_visualize is False):
         im = {'flash':flash_wb, 'noisy':noisy_wb, 'ambient':ambient}
         lbl = {'flash':r'$I_{flash}$', 'noisy':r'$I_{noisy}$', 'ambient':r'$I_{ambient}$'}
         if(not(denoise_original is None)):
@@ -267,7 +267,7 @@ def test_single_image(data, logger, model, errval, metrics, metrics_list, errors
     metrics.update({'psnr':metrics_pred['psnr'], 'lpips':metrics_pred['lpips'],'wlpips':metrics_pred['wlpips']})
     
     # Periodically save visualizations based on visualize_freq
-    if(iteration_count % logger.opts.visualize_freq == 0):
+    if(iteration_count % logger.opts.visualize_freq_test == 0):
         # Toggle eager execution for visualization
         eagerly_state = tf.config.functions_run_eagerly()
         if(not eagerly_state):

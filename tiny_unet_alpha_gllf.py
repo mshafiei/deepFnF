@@ -34,15 +34,15 @@ class Net(gllf_layer_radial):
         # ambient = inp.ambient
         # inp = inp.net_ft_input
         
-        if(self.sources_mode == 3):
-            _, h, w, _ = inp.net_ft_input.shape
-            out, skips = self.resize_encode(inp.net_ft_input)
-            direct_denoised = self.resize_decode(out, skips, h, w)
-            # direct_denoised, image_weights = self.resize_joint_decode(out, skips, h, w)
-            image_weights = self.decode_per_layer(out, skips, self.max_levels, "decode_per_layer_")
-            self.image_weights = [image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1]
-        else:
-            self.resize_encode(inp.net_ft_input)
+        # if(self.sources_mode == 3):
+        _, h, w, _ = inp.net_ft_input.shape
+        out, skips = self.resize_encode(inp.net_ft_input)
+        direct_denoised = self.resize_decode(out, skips, h, w)
+        # direct_denoised, image_weights = self.resize_joint_decode(out, skips, h, w)
+        image_weights = self.decode_per_layer(out, skips, self.max_levels, "decode_per_layer_")
+        self.image_weights = [image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1]
+        # else:
+        #     self.resize_encode(inp.net_ft_input)
         
         #double head neural network
         #one head predicts denoised image
