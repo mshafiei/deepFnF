@@ -7,7 +7,7 @@ import utils.tf_utils as tfu
 from tiny_unet import Net as tiny_unet
 from easydict import EasyDict as edict
 class Net(tiny_unet):
-    def __init__(self, downsample_ct=0, unet_output_size=3, channels_count_factor=1, use_up_block=True, per_layer_decoder_nchannels=3, has_image_weights=False):
+    def __init__(self, downsample_ct=0, unet_output_size=3, channels_count_factor=1, use_up_block=True, per_layer_decoder_nchannels=3, has_image_weights=False,llf_remap_function_type="None"):
         super().__init__(unet_output_size=unet_output_size, channels_count_factor=channels_count_factor)
         self.downsample_ct = downsample_ct
         self.channel_count = lambda x: max(1, int(x * self.channels_count_factor)//(2**self.downsample_ct))
@@ -15,6 +15,7 @@ class Net(tiny_unet):
         self.use_up_block = use_up_block
         self.per_layer_decoder_nchannels = per_layer_decoder_nchannels
         self.has_image_weights = has_image_weights
+        self.llf_remap_function_type = llf_remap_function_type
 
 
     def encode(self, out, pfx=''):
@@ -64,7 +65,12 @@ class Net(tiny_unet):
         if(self.has_image_weights):
             out, skip1 = self.down_block(out, self.channel_count(512), pfx + 'down1')
             out, skip2 = self.down_block(out, self.channel_count(1024), pfx + 'down2')
-            out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, pfx + 'up1')
+            if(self.llf_remap_function_type == 'fixed_top_layer'):
+                zero = tf.zeros((*out.shape[:-1], 1, self.per_layer_decoder_nchannels))
+                one = tf.ones((*out.shape[:-1], self.img_ct - 1, self.per_layer_decoder_nchannels))
+                decode_layers.d1 = tf.concat((one, zero), axis=-2)
+            else:
+                out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, pfx + 'up1')
             out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, pfx + 'up2')
             out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, pfx + 'up3')
             _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, pfx + 'up4')

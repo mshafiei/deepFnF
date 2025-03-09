@@ -430,6 +430,8 @@ with tf.device('/gpu:0'):
 
             if('filename' in example.keys()):
                 logger.addImage(images, lbls,'train',cols=4, annotation=annotation, image_filename=example['filename'], font_size_scale=2,vertical_spacing_scale=2)
+            else:
+                logger.addImage(images, lbls,'train',cols=4, annotation=annotation, font_size_scale=2,vertical_spacing_scale=2)
     
         if((niter == 0 or niter % opts.visualize_freq_train == 0 ) and opts.no_visualize is False):
             eagerly_state = tf.config.functions_run_eagerly()

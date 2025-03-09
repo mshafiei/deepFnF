@@ -198,7 +198,7 @@ class gllf_layer_radial(tiny_unet):
             #interpolates different ranges
             range_weights           = range_basis_weights[:,basis_weights_size:]
             self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
-            
+
             #create a small unet here
             #if downsample = 0 the unet is just a decoder
             #self.skip_gllf.d1 = self.skip.d1 ...
