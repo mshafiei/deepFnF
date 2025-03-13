@@ -183,29 +183,52 @@ class gllf_layer_radial(tiny_unet):
             range_basis_weights, _  = self.down_block(range_basis_weights, self.channel_count(256), pfx + 'range_basis_down6') #1,4,4,32
             range_basis_weights, _  = self.down_block(range_basis_weights, self.channel_count(128), pfx + 'range_basis_down7') #1,2,2,16
             range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_1', range_basis_weights, total_weights_size, relu=False, ksz=1) #1,2,2,16
-            range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_2', range_basis_weights, total_weights_size, relu=False, ksz=1) #1,2,2,16
+            if(self.llf_remap_function_type == 'fixed_top_layer'):
+                range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_2', range_basis_weights, total_weights_size, relu=False, ksz=1) #1,2,2,16
+            else:
+                range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_2', range_basis_weights, total_weights_size, relu=False, softplus=True, ksz=1) #1,2,2,16
             range_basis_weights     = tf.reduce_sum(range_basis_weights,axis=(1,2))
             basis_weights           = range_basis_weights[:,:basis_weights_size]
             
-            #b,2,I,K
-            basis_weights           = tf.reshape(basis_weights, (1, 2, self.img_ct, self.max_discrete_levels * self.basis_ct * self.rbf_weights_ct))
 
-            experiment=False
-            if(experiment):
-                self.w_i = tf.ones((self.img_ct, self.max_discrete_levels)) * -1
-                self.sigma_i = tf.ones((self.img_ct, self.max_discrete_levels)) * 5.5
-                self.range_weights = tf.ones((1, self.img_ct, self.max_discrete_levels))
-            else:
-                #I,K
-                w_i_amb = tf.ones((1, self.max_discrete_levels)) * -1 #-1
-                w_i_flash = tf.nn.sigmoid(basis_weights[0,0,1:2,:self.max_discrete_levels]) * (1 + 2.3) -1 #-1 is smoothing, 2.3 is increasing details but still keeping the curve differentiable
+            if(self.llf_remap_function_type == 'fixed_top_layer'):
+                #b,2,I,K
+                basis_weights           = tf.reshape(basis_weights, (1, 2, self.img_ct, self.max_discrete_levels * self.basis_ct * self.rbf_weights_ct))
+
+                experiment=False
+                if(experiment):
+                    self.w_i = tf.ones((self.img_ct, self.max_discrete_levels)) * -1
+                    self.sigma_i = tf.ones((self.img_ct, self.max_discrete_levels)) * 5.5
+                    self.range_weights = tf.ones((1, self.img_ct, self.max_discrete_levels))
+                else:
+                    #I,K
+                    w_i_amb = tf.ones((1, self.max_discrete_levels)) * -1 #-1
+                    w_i_flash = tf.nn.sigmoid(basis_weights[0,0,1:2,:self.max_discrete_levels]) * (1 + 2.3) -1 #-1 is smoothing, 2.3 is increasing details but still keeping the curve differentiable
+                    
+                    sigma_amb = 0.1 + tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 #~10 if low noise, ~0.1 for high noise
+                    sigma_flash = tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 # can vary
                 
-                sigma_amb = 0.1 + tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 #~10 if low noise, ~0.1 for high noise
-                sigma_flash = tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 # can vary
-            
-                self.w_i                = tf.concat([w_i_amb, w_i_flash], axis=0)
+                    self.w_i                = tf.concat([w_i_amb, w_i_flash], axis=0)
+                    #I,K
+                    self.sigma_i            = tf.concat([sigma_amb, sigma_flash], axis=0)
+                    
+                    #range weight: k * i
+                    #interpolates different ranges
+                    range_weights           = tf.nn.sigmoid(range_basis_weights[:,basis_weights_size:]) * 2
+                    self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
+            else:
+                #b,2,I,K
+                basis_weights           = tf.reshape(basis_weights, (1, 2, self.img_ct, self.max_discrete_levels * self.basis_ct * self.rbf_weights_ct))
                 #I,K
-                self.sigma_i            = tf.concat([sigma_amb, sigma_flash], axis=0)
+                self.w_i                = (2 * tf.nn.sigmoid(basis_weights[0,0,:,:self.max_discrete_levels]) - 1) * self.gaussian_weights_scale
+                #I,K
+                self.sigma_i            = basis_weights[0,1,:,:self.max_discrete_levels] ** 2 + self.gaussian_sigma_offset
+
+                #range weight: k * i
+                #interpolates different ranges
+                range_weights           = range_basis_weights[:,basis_weights_size:]
+                self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
+
 
             # #I,K
             # self.w_i                = (2 * tf.nn.sigmoid(basis_weights[0,0,:,:self.max_discrete_levels]) - 1) * self.gaussian_weights_scale
@@ -213,10 +236,7 @@ class gllf_layer_radial(tiny_unet):
             # self.sigma_i            = basis_weights[0,1,:,:self.max_discrete_levels] ** 2 + self.gaussian_sigma_offset
 
 
-                #range weight: k * i
-                #interpolates different ranges
-                range_weights           = tf.nn.sigmoid(range_basis_weights[:,basis_weights_size:]) * 2
-                self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
+
 
             #create a small unet here
             #if downsample = 0 the unet is just a decoder

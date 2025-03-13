@@ -66,17 +66,23 @@ class Net(tiny_unet):
             out, skip1 = self.down_block(out, self.channel_count(512), pfx + 'down1')
             out, skip2 = self.down_block(out, self.channel_count(1024), pfx + 'down2')
             if(self.llf_remap_function_type == 'fixed_top_layer'):
+                img_ct = 1
+            else:
+                img_ct = 2
+            if(self.llf_remap_function_type == 'fixed_top_layer'):
                 zero = tf.zeros((*out.shape[:-1], 1, self.per_layer_decoder_nchannels))
                 one = tf.ones((*out.shape[:-1], self.img_ct - 1, self.per_layer_decoder_nchannels))
                 decode_layers.d1 = tf.concat((one, zero), axis=-2)
             else:
-                out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, 1, pfx + 'up1')
-            out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, 1,pfx + 'up2')
-            out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, 1, pfx + 'up3')
-            _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, 1,pfx + 'up4')
-            decode_layers.d2 = tf.concat((tf.ones_like(decode_layers.d2), decode_layers.d2),axis=-2)
-            decode_layers.d3 = tf.concat((tf.ones_like(decode_layers.d3), decode_layers.d3),axis=-2)
-            decode_layers.d4 = tf.concat((tf.ones_like(decode_layers.d4), decode_layers.d4),axis=-2)
+                out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, img_ct, pfx + 'up1')
+            out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, img_ct, pfx + 'up2')
+            out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, img_ct, pfx + 'up3')
+            _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, img_ct, pfx + 'up4')
+            
+            if(self.llf_remap_function_type == 'fixed_top_layer'):
+                decode_layers.d2 = tf.concat((tf.ones_like(decode_layers.d2), decode_layers.d2),axis=-2)
+                decode_layers.d3 = tf.concat((tf.ones_like(decode_layers.d3), decode_layers.d3),axis=-2)
+                decode_layers.d4 = tf.concat((tf.ones_like(decode_layers.d4), decode_layers.d4),axis=-2)
         else:
             decode_layers.d1 = tf.concat((tf.ones((1,2,2,  1,1)),tf.ones((1,2,2,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(512), skips.d5, True, pfx + 'up1')
             decode_layers.d2 = tf.concat((tf.ones((1,4,4,  1,1)),tf.ones((1,4,4,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(256), skips.d4, True, pfx + 'up2')
