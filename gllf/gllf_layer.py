@@ -24,7 +24,7 @@ def gllf_diffable_1d_halide(im_is, IMSZ, range_weights, w_i, sigma_i, img_ct, ma
                         np.ascontiguousarray(sigma_i.transpose(1,0)), img_ct, s_w, s_h, IMSZ, IMSZ, llf_out)
     return llf_out.transpose(2,1,0)[None,...]
 class gllf_layer_radial(tiny_unet):
-    def __init__(self, llf_levels, llf_intensity_levels, llf_remap_function, rbf_weights_ct, yuv_gllf, alphas, betas, sigmas, thresholds, downsample_ct, use_halide_implementation=False, img_ct=None, gaussian_weights_scale=2,gaussian_sigma_offset=3, piecewise_linear_weight_max=3, piecewise_linear_sigma=0.2, basis_ct=1,unet_output_size=6, min_intensity=0.0, max_intensity=1.0, IMSZ=448,**kwargs):
+    def __init__(self, llf_levels, llf_intensity_levels, llf_remap_function, rbf_weights_ct, yuv_gllf, alphas, betas, sigmas, thresholds, downsample_ct, use_halide_implementation=False, img_ct=None, gaussian_weights_scale=10,gaussian_sigma_offset=3, piecewise_linear_weight_max=3, piecewise_linear_sigma=0.2, basis_ct=1,unet_output_size=6, min_intensity=0.0, max_intensity=1.0, IMSZ=448,**kwargs):
         super().__init__(downsample_ct, unet_output_size=unet_output_size,**kwargs)
         self.max_levels = llf_levels
         self.max_discrete_levels = llf_intensity_levels
@@ -183,21 +183,40 @@ class gllf_layer_radial(tiny_unet):
             range_basis_weights, _  = self.down_block(range_basis_weights, self.channel_count(256), pfx + 'range_basis_down6') #1,4,4,32
             range_basis_weights, _  = self.down_block(range_basis_weights, self.channel_count(128), pfx + 'range_basis_down7') #1,2,2,16
             range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_1', range_basis_weights, total_weights_size, relu=False, ksz=1) #1,2,2,16
-            range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_2', range_basis_weights, total_weights_size, relu=False, softplus=True, ksz=1) #1,2,2,16
+            range_basis_weights     = self.conv(pfx + 'range_basis_bottleneck_2', range_basis_weights, total_weights_size, relu=False, ksz=1) #1,2,2,16
             range_basis_weights     = tf.reduce_sum(range_basis_weights,axis=(1,2))
             basis_weights           = range_basis_weights[:,:basis_weights_size]
             
             #b,2,I,K
             basis_weights           = tf.reshape(basis_weights, (1, 2, self.img_ct, self.max_discrete_levels * self.basis_ct * self.rbf_weights_ct))
-            #I,K
-            self.w_i                = (2 * tf.nn.sigmoid(basis_weights[0,0,:,:self.max_discrete_levels]) - 1) * self.gaussian_weights_scale
-            #I,K
-            self.sigma_i            = basis_weights[0,1,:,:self.max_discrete_levels] ** 2 + self.gaussian_sigma_offset
 
-            #range weight: k * i
-            #interpolates different ranges
-            range_weights           = range_basis_weights[:,basis_weights_size:]
-            self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
+            experiment=False
+            if(experiment):
+                self.w_i = tf.ones((self.img_ct, self.max_discrete_levels)) * -1
+                self.sigma_i = tf.ones((self.img_ct, self.max_discrete_levels)) * 5.5
+                self.range_weights = tf.ones((1, self.img_ct, self.max_discrete_levels))
+            else:
+                #I,K
+                w_i_amb = tf.ones((1, self.max_discrete_levels)) * -1 #-1
+                w_i_flash = tf.nn.sigmoid(basis_weights[0,0,1:2,:self.max_discrete_levels]) * (1 + 2.3) -1 #-1 is smoothing, 2.3 is increasing details but still keeping the curve differentiable
+                
+                sigma_amb = 0.1 + tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 #~10 if low noise, ~0.1 for high noise
+                sigma_flash = tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 # can vary
+            
+                self.w_i                = tf.concat([w_i_amb, w_i_flash], axis=0)
+                #I,K
+                self.sigma_i            = tf.concat([sigma_amb, sigma_flash], axis=0)
+
+            # #I,K
+            # self.w_i                = (2 * tf.nn.sigmoid(basis_weights[0,0,:,:self.max_discrete_levels]) - 1) * self.gaussian_weights_scale
+            # #I,K
+            # self.sigma_i            = basis_weights[0,1,:,:self.max_discrete_levels] ** 2 + self.gaussian_sigma_offset
+
+
+                #range weight: k * i
+                #interpolates different ranges
+                range_weights           = tf.nn.sigmoid(range_basis_weights[:,basis_weights_size:]) * 2
+                self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
 
             #create a small unet here
             #if downsample = 0 the unet is just a decoder
@@ -345,7 +364,19 @@ class gllf_layer_radial(tiny_unet):
                     outLPyramid_slice_with_image_weight = self.apply_image_weights_to_pyramid(outLPyramid_slice_with_range_weight, self.image_weights[i])
                     outLPyramid_image.append(outLPyramid_slice_with_image_weight)
                 outLPyramid_range.append(outLPyramid_slice_with_range_weight)
-                
+            #pack individual pyramids
+            intensity_level_images = []
+            for i in range(self.img_ct):
+                img_i_levels_j = []
+                for j in range(self.max_discrete_levels):
+                    levels_j = []
+                    for k in range(self.max_levels):
+                        levels_j.append(outLPyramids[k][:,i,j,...])
+                    img_i_levels_j.append(reconstruct_Laplacian(levels_j, self.max_levels))
+                intensity_level_images.append(img_i_levels_j)
+
+
+
             intensity_images_range = []
             intensity_images_image = []
             for i in range(self.img_ct):
@@ -361,7 +392,7 @@ class gllf_layer_radial(tiny_unet):
             # for i in range(self.max_levels):
             #     outLPyramid_slice = self.diffable_slice_separable(G_is[i], outLPyramids[i], self.image_weights[i]) #1, h, w, c
             #     outLPyramid.append(outLPyramid_slice)
-            return intensity_images_range, intensity_images_image
+            return intensity_images_range, intensity_images_image, intensity_level_images
             # return reconstruct_Laplacian(outLPyramid, self.max_levels), None
         else:
             for i in range(self.max_levels):
@@ -436,12 +467,13 @@ class gllf_layer_radial(tiny_unet):
     def visualize(self, im_is):
         x = np.linspace(0, 1, 1000)
         visualizations = []
-        reconstructed_images_range, reconstructed_images_image = self.gllf_diffable_1d(im_is, debug_reconstruct_all_remapping_images=True)
+        reconstructed_images_range, reconstructed_images_image, intensity_level_images = self.gllf_diffable_1d(im_is, debug_reconstruct_all_remapping_images=True)
         for j in range(self.img_ct):
             for i in range(self.max_discrete_levels):
                 y = self.remapping_sampler(j, i, start=0., stop=1., num=1000)
                 # ,xlim=[-1.2,1.2],ylim=[-1.2,1.2]
                 visualizations += [edict(image=viz.plot(x, y) / 255., label='$image=%i, \gamma=%i$'% (j,i), key='remapping_%i_%i' % (i, j))]
+                visualizations += [edict(image=intensity_level_images[j][i], label='$image=%i, \gamma=%i$'% (j,i), key='intensity_level_%i_%i' % (i, j))]
             visualizations += [edict(image=reconstructed_images_range[j], label='$image=%i, reconstructed w range$'% (j), key='reconstructed_w_range%i' % (j))]
             if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
                 visualizations += [edict(image=reconstructed_images_image[j], label='$image=%i, reconstructed w range+image$'% (j), key='reconstructed w range+image %i' % (j))]

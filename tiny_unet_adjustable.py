@@ -43,15 +43,15 @@ class Net(tiny_unet):
         self.skips = skips
         return out, skips
     
-    def up_and_out(self, out, nch, skip, is_out_layer, pfx=''):
-        nchannels = self.img_ct * self.per_layer_decoder_nchannels
+    def up_and_out(self, out, nch, skip, is_out_layer, img_ct, pfx=''):
+        nchannels = img_ct * self.per_layer_decoder_nchannels
         out_layer = out
         out = self.up_block(out, nch, skip, pfx)
         if(is_out_layer):
             for i in range(int(np.log2(nch) - np.ceil(np.log2(nchannels)))):
                 out_layer = self.conv(pfx + '_end_%i'%(i+1), out_layer, self.channel_count_end(512)//(2**i),relu=False)
-            out_layer = self.conv(pfx + '_end_last', out_layer, self.img_ct * self.per_layer_decoder_nchannels,relu=False)
-            out_layer = tf.reshape(out_layer, (*out_layer.shape[:-1], self.img_ct, self.per_layer_decoder_nchannels))
+            out_layer = self.conv(pfx + '_end_last', out_layer, img_ct * self.per_layer_decoder_nchannels,relu=False)
+            out_layer = tf.reshape(out_layer, (*out_layer.shape[:-1], img_ct, self.per_layer_decoder_nchannels))
             return out, out_layer
         else:
             return out, None
@@ -70,15 +70,18 @@ class Net(tiny_unet):
                 one = tf.ones((*out.shape[:-1], self.img_ct - 1, self.per_layer_decoder_nchannels))
                 decode_layers.d1 = tf.concat((one, zero), axis=-2)
             else:
-                out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, pfx + 'up1')
-            out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, pfx + 'up2')
-            out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, pfx + 'up3')
-            _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, pfx + 'up4')
+                out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, 1, pfx + 'up1')
+            out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, 1,pfx + 'up2')
+            out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, 1, pfx + 'up3')
+            _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, 1,pfx + 'up4')
+            decode_layers.d2 = tf.concat((tf.ones_like(decode_layers.d2), decode_layers.d2),axis=-2)
+            decode_layers.d3 = tf.concat((tf.ones_like(decode_layers.d3), decode_layers.d3),axis=-2)
+            decode_layers.d4 = tf.concat((tf.ones_like(decode_layers.d4), decode_layers.d4),axis=-2)
         else:
-            decode_layers.d1 = tf.ones((1,2,2,3,1))#self.up_and_out(out, self.channel_count(512), skips.d5, True, pfx + 'up1')
-            decode_layers.d2 = tf.ones((1,4,4,3,1))#self.up_and_out(out, self.channel_count(256), skips.d4, True, pfx + 'up2')
-            decode_layers.d3 = tf.ones((1,7,7,3,1))#self.up_and_out(out, self.channel_count(128), skips.d3, True, pfx + 'up3')
-            decode_layers.d4 = tf.ones((1,14,14,3,1))#self.up_and_out(out, self.channel_count(64), skips.d2, True, pfx + 'up4')
+            decode_layers.d1 = tf.concat((tf.ones((1,2,2,  1,1)),tf.ones((1,2,2,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(512), skips.d5, True, pfx + 'up1')
+            decode_layers.d2 = tf.concat((tf.ones((1,4,4,  1,1)),tf.ones((1,4,4,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(256), skips.d4, True, pfx + 'up2')
+            decode_layers.d3 = tf.concat((tf.ones((1,7,7,  1,1)),tf.ones((1,7,7,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(128), skips.d3, True, pfx + 'up3')
+            decode_layers.d4 = tf.concat((tf.ones((1,14,14,1,1)),tf.ones((1,14,14,1,1))), axis=-2)#self.up_and_out(out, self.channel_count(64), skips.d2, True, pfx + 'up4')
         
         return decode_layers
 
