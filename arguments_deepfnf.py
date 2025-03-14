@@ -59,7 +59,7 @@ def parse_arguments_deepfnf():
     parser.add_argument('--use_halide_implementation', type=str_to_bool, default=False, help='size of kernel')
     parser.add_argument('--apply_gradient', type=str_to_bool, default=True, help='size of kernel')
     parser.add_argument('--llf_remap_function', type=str, default='gaussian_1d', choices=['exp_1d','manual_1d','exp_2d','gaussian_1d','piecewise_linear','manual'], help='size of kernel')
-    parser.add_argument('--llf_remap_function_type', type=str, default='None', choices=['fixed_top_layer','None'], help='size of kernel')
+    parser.add_argument('--llf_remap_function_type', type=str, default='None', choices=['no_nn','fixed_top_layer','None'], help='size of kernel')
     parser.add_argument('--unet_output_size', type=int, default=3, help='size of kernel')
     parser.add_argument('--downsample_ct', type=int, default=0, help='size of kernel')
     parser.add_argument('--channels_count_factors', type=float, default=1, help='size of kernel')

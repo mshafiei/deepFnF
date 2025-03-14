@@ -56,23 +56,21 @@ class Net(tiny_unet):
         else:
             return out, None
 
-    def decode_per_layer(self, out, skips, max_levels=5, pfx=''):
+    def decode_per_layer(self, out, skips, brightness_scale, max_levels=5, pfx=''):
         decode_layers = edict()
-
+        self.brightness_diff = brightness_scale
     
         # for i in range(5):
         #     out, out_layer = self.up_and_out(out, self.channel_count(512//i), skips[], self.start_level == 0 and self.max_levels > 1, pfx + 'up1')
         if(self.has_image_weights):
             out, skip1 = self.down_block(out, self.channel_count(512), pfx + 'down1')
             out, skip2 = self.down_block(out, self.channel_count(1024), pfx + 'down2')
-            if(self.llf_remap_function_type == 'fixed_top_layer'):
+            if(self.llf_remap_function_type == 'fixed_top_layer' or self.llf_remap_function_type == 'no_nn'):
                 img_ct = 1
             else:
                 img_ct = 2
-            if(self.llf_remap_function_type == 'fixed_top_layer'):
-                zero = tf.zeros((*out.shape[:-1], 1, self.per_layer_decoder_nchannels))
-                one = tf.ones((*out.shape[:-1], self.img_ct - 1, self.per_layer_decoder_nchannels))
-                decode_layers.d1 = tf.concat((one, zero), axis=-2)
+            if(self.llf_remap_function_type == 'fixed_top_layer' or self.llf_remap_function_type == 'no_nn'):
+                decode_layers.d1 = tf.convert_to_tensor([1., 0.])
             else:
                 out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, img_ct, pfx + 'up1')
             out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, img_ct, pfx + 'up2')
@@ -80,9 +78,26 @@ class Net(tiny_unet):
             _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, img_ct, pfx + 'up4')
             
             if(self.llf_remap_function_type == 'fixed_top_layer'):
-                decode_layers.d2 = tf.concat((tf.ones_like(decode_layers.d2), decode_layers.d2),axis=-2)
-                decode_layers.d3 = tf.concat((tf.ones_like(decode_layers.d3), decode_layers.d3),axis=-2)
-                decode_layers.d4 = tf.concat((tf.ones_like(decode_layers.d4), decode_layers.d4),axis=-2)
+                sig_d2 = tf.nn.sigmoid(decode_layers.d2)
+                sig_d3 = tf.nn.sigmoid(decode_layers.d3)*0.9+0.1
+                sig_d4 = tf.nn.sigmoid(decode_layers.d4)*0.8+0.2
+
+                decode_layers.d2 = tf.concat((tf.ones_like(decode_layers.d2), sig_d2),axis=-2)
+                decode_layers.d3 = tf.concat((tf.ones_like(decode_layers.d3), sig_d3),axis=-2)
+                decode_layers.d4 = tf.concat((tf.ones_like(decode_layers.d4), sig_d4),axis=-2)
+            elif(self.llf_remap_function_type == 'no_nn'):
+                #flash weights are proportional to dim level
+                flash_d2 = self.brightness_diff**4
+                flash_d3 = self.brightness_diff**2
+                flash_d4 = self.brightness_diff**0.25
+
+                ambient_d2 = 1 - self.brightness_diff**4
+                ambient_d3 = 1 - self.brightness_diff**2
+                ambient_d4 = 1 - self.brightness_diff**0.25
+
+                decode_layers.d2 = tf.convert_to_tensor([ambient_d2, flash_d2])
+                decode_layers.d3 = tf.convert_to_tensor([ambient_d3, flash_d3])
+                decode_layers.d4 = tf.convert_to_tensor([ambient_d4, flash_d4])
         else:
             decode_layers.d1 = tf.concat((tf.ones((1,2,2,  1,1)),tf.ones((1,2,2,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(512), skips.d5, True, pfx + 'up1')
             decode_layers.d2 = tf.concat((tf.ones((1,4,4,  1,1)),tf.ones((1,4,4,  1,1))), axis=-2)#self.up_and_out(out, self.channel_count(256), skips.d4, True, pfx + 'up2')

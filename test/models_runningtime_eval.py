@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import tiny_unet_alpha_gllf
 import os
 import cvgutils.Viz as viz
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 
 # @tf.function
 def exec_model(model, input):
@@ -42,6 +42,7 @@ downsample_ct        = [1, 3]
 samples = edict()
 samples.unet_gllf = []
 samples.unet_gllf_image_weight = []
+samples.unet_gllf_image_weight_global = []
 samples.unet = []
 samples.deepfnf = []
 samples.bpn = []
@@ -90,30 +91,33 @@ for i, (downsample, channels_count_factor) in enumerate(zip(downsample_ct, chann
     # downsample_ct=0, unet_output_size=3, channels_count_factor=1
     unet_gllf = tiny_unet_alpha_gllf.Net(downsample_ct=downsample, channels_count_factor=channels_count_factor, input_images=["noisy_ambient","noisy_flash", "deep_denoised"], llf_levels=4, llf_intensity_levels=4, llf_remap_function="gaussian_1d", rbf_weights_ct=8, yuv_gllf="false", alphas=1.0, betas=1.0, sigmas=1.0, thresholds=None, use_halide_implementation=True)
     unet_gllf_image_weight = tiny_unet_alpha_gllf.Net(downsample_ct=downsample, channels_count_factor=channels_count_factor, has_image_weights=True, input_images=["noisy_ambient","noisy_flash"], llf_levels=4, llf_intensity_levels=4, llf_remap_function="gaussian_1d", rbf_weights_ct=8, yuv_gllf="false", alphas=1.0, betas=1.0, sigmas=1.0, thresholds=None, use_halide_implementation=True)
+    unet_gllf_image_weight_global = tiny_unet_alpha_gllf.Net(downsample_ct=downsample, channels_count_factor=channels_count_factor, has_image_weights=True, input_images=["noisy_ambient","noisy_flash"], llf_levels=4, llf_intensity_levels=4, llf_remap_function="gaussian_1d", rbf_weights_ct=8, yuv_gllf="false", alphas=1.0, betas=1.0, sigmas=1.0, thresholds=None, use_halide_implementation=True,llf_remap_function_type='no_nn')
     unet = tiny_unet_adjustable_fnf.Net(downsample, unet_output_size=3, channels_count_factor=channels_count_factor)
     deepfnf = deepfnf_adjustable.Net(downsample_ct=downsample, unet_output_size=3, num_basis=90, ksz=15, burst_length=2, channels_count_factor=channels_count_factor)
     bpn = deepfnf_adjustable_bpn.Net(downsample_ct=downsample, unet_output_size=3, num_basis=90, ksz=15, burst_length=2, channels_count_factor=channels_count_factor)
     unet_gllf_t = eval_latency(lambda:exec_model(unet_gllf, inpt), "unet_gllf_downsample_%i" % downsample)
     unet_gllf_image_weight_t = eval_latency(lambda:exec_model(unet_gllf_image_weight, inpt), "unet_gllf_image_weight_downsample_%i" % downsample)
+    unet_gllf_image_weight_global_t = eval_latency(lambda:exec_model(unet_gllf_image_weight_global, inpt), "unet_gllf_image_weight_global_downsample_%i" % downsample)
     bpn_t = eval_latency(lambda:exec_model(bpn, inpt), "bpn_downsample_%i" % downsample)
     deepfnf_t = eval_latency(lambda:exec_model(deepfnf, inpt), "deepfnf_downsample_%i" % downsample)
     unet_t = eval_latency(lambda:exec_model(unet, inpt), "unet_downsample_%i" % downsample)
     
-    if(tiny_unet_alpha_gllf_error):
-        samples.unet_gllf.append(unet_gllf_t)
-        samples.unet_gllf_error.append(tiny_unet_alpha_gllf_error)
-    if(tiny_unet_alpha_gllf_image_weight_error):
-        samples.unet_gllf_image_weight.append(unet_gllf_image_weight_t)
-        samples.unet_gllf_image_weight_error.append(tiny_unet_alpha_gllf_image_weight_error)
-    if(tiny_unet_adjustable_fnf_error):
-        samples.unet.append(unet_t)
-        samples.unet_error.append(tiny_unet_adjustable_fnf_error)
-    if(deepfnf_adjustable_error):
-        samples.deepfnf.append(deepfnf_t)
-        samples.deepfnf_error.append(deepfnf_adjustable_error)
-    if(deepfnf_adjustable_error):
-        samples.bpn.append(bpn_t)
-        samples.bpn_error.append(deepfnf_adjustable_bpn_error)
+    # if(tiny_unet_alpha_gllf_error):
+    samples.unet_gllf.append(unet_gllf_t)
+    samples.unet_gllf_error.append(tiny_unet_alpha_gllf_error)
+    # if(tiny_unet_alpha_gllf_image_weight_error):
+    samples.unet_gllf_image_weight.append(unet_gllf_image_weight_t)
+    samples.unet_gllf_image_weight_global.append(unet_gllf_image_weight_global_t)
+    samples.unet_gllf_image_weight_error.append(tiny_unet_alpha_gllf_image_weight_error)
+    # if(tiny_unet_adjustable_fnf_error):
+    samples.unet.append(unet_t)
+    samples.unet_error.append(tiny_unet_adjustable_fnf_error)
+    # if(deepfnf_adjustable_error):
+    samples.deepfnf.append(deepfnf_t)
+    samples.deepfnf_error.append(deepfnf_adjustable_error)
+    # if(deepfnf_adjustable_error):
+    samples.bpn.append(bpn_t)
+    samples.bpn_error.append(deepfnf_adjustable_bpn_error)
     viz.dumpDictJson(samples, latency_fn)
 
 # plot linearly, ensure samples are close to each other and they are dense enough

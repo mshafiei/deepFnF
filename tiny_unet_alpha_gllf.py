@@ -36,11 +36,17 @@ class Net(gllf_layer_radial):
         
         # if(self.sources_mode == 3):
         _, h, w, _ = inp.net_ft_input.shape
+        min_brightness = 5.5
+        max_brightness = 25
+        brightness_scale = (tf.clip_by_value(1/tf.squeeze(inp.alpha), min_brightness+0.1, max_brightness) - min_brightness) / (max_brightness - min_brightness)
         out, skips = self.resize_encode(inp.net_ft_input)
         direct_denoised = self.resize_decode(out, skips, h, w)
         # direct_denoised, image_weights = self.resize_joint_decode(out, skips, h, w)
-        image_weights = self.decode_per_layer(out, skips, self.max_levels, "decode_per_layer_")
-        self.image_weights = [image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1]
+        image_weights = self.decode_per_layer(out, skips, brightness_scale, self.max_levels, "decode_per_layer_")
+        if(self.llf_remap_function_type == 'no_nn'):
+            self.image_weights = tf.stack([image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1], axis=0)
+        else:
+            self.image_weights = [image_weights.d4, image_weights.d3, image_weights.d2, image_weights.d1]
         # else:
         #     self.resize_encode(inp.net_ft_input)
         
@@ -51,12 +57,12 @@ class Net(gllf_layer_radial):
         #Pass the bottleneck to a few convolution layers
         #Upsample the output
         #Pass to GLLF
-
+        
         ambient_scaled = tfu.camera_to_rgb(
             inp.net_ft_input[:, :, :, :3] / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
         flash_scaled = tfu.camera_to_rgb(
             inp.net_ft_input[:, :, :, 3:6], inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
-        
+
         source_images = []
         if(self.sources_mode >=1):
             source_images.append(ambient_scaled)
@@ -69,10 +75,9 @@ class Net(gllf_layer_radial):
                 direct_denoised / inp.alpha, inp.color_matrix, inp.adapt_matrix, do_gamma_correct=False)
             source_images.append(direct_denoised)
 
-
         if(visualize):
-            visualization = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
-            output = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=False)
+            visualization = self.gllf(source_images, self.bottleneck, brightness_scale, reconstruct_gllf_pyramids=visualize)
+            output = self.gllf(source_images, self.bottleneck, brightness_scale, reconstruct_gllf_pyramids=False)
             
             for i in range(len(visualization)):
                 visualization[i].image = tfu.gamma_correct(visualization[i].image)
@@ -90,6 +95,6 @@ class Net(gllf_layer_radial):
             return visualization
         else:
             output=edict()
-            output.output = self.gllf(source_images, self.bottleneck, reconstruct_gllf_pyramids=visualize)
+            output.output = self.gllf(source_images, self.bottleneck, brightness_scale, reconstruct_gllf_pyramids=visualize)
             output.output = tfu.gamma_correct(output.output)
             return output

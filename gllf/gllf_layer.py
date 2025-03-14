@@ -5,8 +5,20 @@ from tiny_unet_adjustable import Net as tiny_unet
 import utils.tf_utils as tfu
 import cvgutils.Viz as viz
 from easydict import EasyDict as edict
+import time
 #encode: a vector per intensity layer
 # each vector represents an odd basis function
+
+@tf.numpy_function(Tout=tf.float32)
+def gllf_diffable_1d_halide_scalar(im_is, IMSZ, w_i, sigma_i, img_ct, max_levels, image_weights):
+    from guided_local_laplacian_color_neural_global_alpha_Mullapudi2016 import guided_local_laplacian_color_neural_global_alpha_Mullapudi2016 as guided_local_laplacian_color
+    llf_out = np.empty([3, IMSZ, IMSZ], dtype=np.float32)
+    input_contiguous = np.ascontiguousarray(im_is[0].transpose(3,2,1,0))
+    guided_local_laplacian_color(input_contiguous, max_levels, 
+                        np.ascontiguousarray(image_weights.transpose(1,0)),
+                        np.ascontiguousarray(w_i.transpose(1,0)), 
+                        np.ascontiguousarray(sigma_i.transpose(1,0)), img_ct, llf_out)
+    return llf_out.transpose(2,1,0)[None,...]
 
 @tf.numpy_function(Tout=tf.float32)
 def gllf_diffable_1d_halide(im_is, IMSZ, range_weights, w_i, sigma_i, img_ct, max_levels, image_weights_0, image_weights_1, image_weights_2, image_weights_3):
@@ -24,8 +36,10 @@ def gllf_diffable_1d_halide(im_is, IMSZ, range_weights, w_i, sigma_i, img_ct, ma
                         np.ascontiguousarray(sigma_i.transpose(1,0)), img_ct, s_w, s_h, IMSZ, IMSZ, llf_out)
     return llf_out.transpose(2,1,0)[None,...]
 class gllf_layer_radial(tiny_unet):
-    def __init__(self, llf_levels, llf_intensity_levels, llf_remap_function, rbf_weights_ct, yuv_gllf, alphas, betas, sigmas, thresholds, downsample_ct, use_halide_implementation=False, img_ct=None, gaussian_weights_scale=10,gaussian_sigma_offset=3, piecewise_linear_weight_max=3, piecewise_linear_sigma=0.2, basis_ct=1,unet_output_size=6, min_intensity=0.0, max_intensity=1.0, IMSZ=448,**kwargs):
+    def __init__(self, llf_levels, llf_intensity_levels, llf_remap_function, rbf_weights_ct, yuv_gllf, alphas, betas, sigmas, thresholds, downsample_ct, use_halide_implementation=False, img_ct=None, gaussian_weights_scale=10,gaussian_sigma_offset=3, piecewise_linear_weight_max=3, piecewise_linear_sigma=0.2, basis_ct=1,unet_output_size=6, min_intensity=0.0, max_intensity=1.0, IMSZ=448,llf_remap_function_type='None',**kwargs):
         super().__init__(downsample_ct, unet_output_size=unet_output_size,**kwargs)
+        
+        self.llf_remap_function_type=llf_remap_function_type
         self.max_levels = llf_levels
         self.max_discrete_levels = llf_intensity_levels
         self.min_intensity=min_intensity
@@ -55,7 +69,8 @@ class gllf_layer_radial(tiny_unet):
         self.img_ct = img_ct
 
     
-    def gllf(self, diffable_imgs, bottleneck, reconstruct_gllf_pyramids=False):
+    def gllf(self, diffable_imgs, bottleneck, brightness_diff, reconstruct_gllf_pyramids=False):
+        self.brightness_diff = brightness_diff
         self.scalar_alphas_net(bottleneck)
         tf.debugging.assert_equal(self.img_ct, len(diffable_imgs))
         imgs = []
@@ -85,7 +100,14 @@ class gllf_layer_radial(tiny_unet):
             #     im += i
             # return im
             if(self.use_halide_implementation):
-                output = gllf_diffable_1d_halide(tf.stack(imgs,axis=-1), self.IMSZ, self.range_weights, self.w_i, self.sigma_i, self.img_ct, self.max_levels, self.image_weights[0], self.image_weights[1], self.image_weights[2], self.image_weights[3])
+                if(self.llf_remap_function_type == 'no_nn'):
+                    start = time.time_ns()
+                    output = gllf_diffable_1d_halide_scalar(tf.stack(imgs,axis=-1), self.IMSZ, self.w_i, self.sigma_i, self.img_ct, self.max_levels, self.image_weights)
+                    print('Halide takes', '%.02f' % ((time.time_ns() - start)/1000000), ' ms')
+                else:
+                    start = time.time_ns()
+                    output = gllf_diffable_1d_halide(tf.stack(imgs,axis=-1), self.IMSZ, self.range_weights, self.w_i, self.sigma_i, self.img_ct, self.max_levels, self.image_weights[0], self.image_weights[1], self.image_weights[2], self.image_weights[3])
+                    print('Halide takes', '%.02f' % ((time.time_ns() - start)/1000000), ' ms')
                 # return imgs[-1]
             else:
                 output = self.gllf_diffable_1d(imgs)
@@ -205,7 +227,7 @@ class gllf_layer_radial(tiny_unet):
                     w_i_amb = tf.ones((1, self.max_discrete_levels)) * -1 #-1
                     w_i_flash = tf.nn.sigmoid(basis_weights[0,0,1:2,:self.max_discrete_levels]) * (1 + 2.3) -1 #-1 is smoothing, 2.3 is increasing details but still keeping the curve differentiable
                     
-                    sigma_amb = 0.1 + tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 #~10 if low noise, ~0.1 for high noise
+                    sigma_amb = 0.1 + tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 3 #~10 if low noise, ~0.1 for high noise
                     sigma_flash = tf.nn.sigmoid(basis_weights[0,1,0:1,:self.max_discrete_levels]) * 10 # can vary
                 
                     self.w_i                = tf.concat([w_i_amb, w_i_flash], axis=0)
@@ -216,6 +238,20 @@ class gllf_layer_radial(tiny_unet):
                     #interpolates different ranges
                     range_weights           = tf.nn.sigmoid(range_basis_weights[:,basis_weights_size:]) * 2
                     self.range_weights      = tf.reshape(range_weights,(1,self.img_ct, self.max_discrete_levels))
+            elif(self.llf_remap_function_type == 'no_nn'):
+                #I,K
+                    w_i_amb = tf.ones((1, self.max_discrete_levels)) * -self.brightness_diff**0.25 #-1
+                    w_i_flash = tf.zeros((1, self.max_discrete_levels))
+                    
+                    sigma_amb = tf.ones((1, self.max_discrete_levels)) * 1/self.brightness_diff**0.25
+                    sigma_flash = tf.zeros((1, self.max_discrete_levels))
+                
+                    self.w_i                = tf.concat([w_i_amb, w_i_flash], axis=0)
+                    #I,K
+                    self.sigma_i            = tf.concat([sigma_amb, sigma_flash], axis=0)
+                    
+                    #range weight: k * i
+                    #interpolates different ranges
             else:
                 #b,2,I,K
                 basis_weights           = tf.reshape(basis_weights, (1, 2, self.img_ct, self.max_discrete_levels * self.basis_ct * self.rbf_weights_ct))
@@ -351,9 +387,15 @@ class gllf_layer_radial(tiny_unet):
         return outLPyramids
     
     def diffable_slice_separable(self, l_i, lpyramids, image_weights):
-        outLPyramids = self.diffable_slice_separable_expansion(l_i, lpyramids * self.range_weights[...,None,None,None]) #1, I, h, w, c
-        if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
-            outLPyramids = self.apply_image_weights_to_pyramid(outLPyramids, image_weights)
+        if(self.llf_remap_function_type == 'no_nn'):
+            outLPyramids = self.diffable_slice_separable_expansion(l_i, lpyramids) #1, I, h, w, c
+            if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
+                outLPyramids = self.apply_image_weights_to_pyramid(outLPyramids, image_weights)
+        else:
+            outLPyramids = self.diffable_slice_separable_expansion(l_i, lpyramids * self.range_weights[...,None,None,None]) #1, I, h, w, c
+            if(self.llf_remap_function == 'gaussian_1d' or self.llf_remap_function == 'exp_1d'):
+                outLPyramids = self.apply_image_weights_to_pyramid(outLPyramids, image_weights)
+
         return tf.reduce_sum(outLPyramids,axis=1) #1, h, w, c
     
     def gllf_diffable_1d(self, im_is, debug_reconstruct_all_remapping_images=False):

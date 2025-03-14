@@ -279,7 +279,7 @@ def test_single_image(data, logger, model, errval, metrics, metrics_list, errors
         images, lbls = model.visualize(model_inputs)
         
         # Save visualizations through logger
-        logger.addImage(images, lbls,'test',cols=6, annotation={'output':annotation}, image_filename=filename, font_size_scale=2,vertical_spacing_scale=2, subtext=subtext)
+        logger.addImage(images, lbls,os.path.basename(filename) + ('_%s' % (levelKey)),cols=6, annotation={'output':annotation}, mode='test', image_filename=filename, font_size_scale=2,vertical_spacing_scale=2, subtext=subtext)
         logger.addIndividualImages({'output':images['output']}, {'output':lbls['output']})
         
         # Restore previous eager execution state
