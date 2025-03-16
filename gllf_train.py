@@ -20,7 +20,7 @@ import keras
 from datetime import datetime
 import cv2
 from easydict import EasyDict as edict
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 
 lpips, wlpips = linalg.load_lpips()
 
