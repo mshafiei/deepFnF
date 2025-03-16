@@ -65,19 +65,26 @@ class Net(tiny_unet):
         if(self.has_image_weights):
             out, skip1 = self.down_block(out, self.channel_count(512), pfx + 'down1')
             out, skip2 = self.down_block(out, self.channel_count(1024), pfx + 'down2')
-            if(self.llf_remap_function_type == 'fixed_top_layer' or self.llf_remap_function_type == 'no_nn'):
-                img_ct = 1
-            else:
-                img_ct = 2
-            if(self.llf_remap_function_type == 'fixed_top_layer' or self.llf_remap_function_type == 'no_nn'):
-                decode_layers.d1 = tf.convert_to_tensor([1., 0.])
-            else:
-                out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, img_ct, pfx + 'up1')
-            out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, img_ct, pfx + 'up2')
-            out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, img_ct, pfx + 'up3')
-            _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, img_ct, pfx + 'up4')
+            # if(self.llf_remap_function_type == 'fixed_top_layer_less_nn' or self.llf_remap_function_type == 'no_nn'):
+            #     img_ct = 1
+            # else:
+            #     img_ct = 2
+            # if(self.llf_remap_function_type == 'fixed_top_layer_less_nn' or self.llf_remap_function_type == 'no_nn'):
+            #     decode_layers.d1 = tf.convert_to_tensor([1., 0.])
+            # else:
+            #     out, decode_layers.d1 = self.up_and_out(out, self.channel_count(512), skip2, True, img_ct, pfx + 'up1')
+            # out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, img_ct, pfx + 'up2')
+            # out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, img_ct, pfx + 'up3')
+            # _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, img_ct, pfx + 'up4')
             
             if(self.llf_remap_function_type == 'fixed_top_layer'):
+                zero = tf.zeros((*out.shape[:-1], 1, self.per_layer_decoder_nchannels))
+                one = tf.ones((*out.shape[:-1], self.img_ct - 1, self.per_layer_decoder_nchannels))
+                decode_layers.d1 = tf.concat((one, zero), axis=-2)
+                out, decode_layers.d2 = self.up_and_out(out, self.channel_count(256), skip1, True, self.img_ct, pfx + 'up2')
+                out, decode_layers.d3 = self.up_and_out(out, self.channel_count(128), skips.d5, True, self.img_ct, pfx + 'up3')
+                _, decode_layers.d4 = self.up_and_out(out, self.channel_count(64), skips.d4, True, self.img_ct, pfx + 'up4')
+            elif(self.llf_remap_function_type == 'fixed_top_layer_less'):
                 sig_d2 = tf.nn.sigmoid(decode_layers.d2)
                 sig_d3 = tf.nn.sigmoid(decode_layers.d3)*0.9+0.1
                 sig_d4 = tf.nn.sigmoid(decode_layers.d4)*0.8+0.2
